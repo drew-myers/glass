@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "bun run src/main.ts",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest",
+		"test": "bun run --bun vitest",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"check": "biome check --write ."
