@@ -16,7 +16,7 @@
 	},
 	"overrides": [
 		{
-			"include": ["src/domain/**/*.ts"],
+			"include": ["src/domain/**/*.ts", "src/ui/**/*.ts"],
 			"linter": {
 				"rules": {
 					"complexity": {
