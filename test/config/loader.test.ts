@@ -1,12 +1,13 @@
 import { FileSystem } from "@effect/platform";
 import { SystemError } from "@effect/platform/Error";
 import { describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import { expect } from "vitest";
 import {
 	Config,
 	ConfigLive,
 	GlassConfigSchema,
+	getSentryConfig,
 	interpolateEnvVars,
 	loadConfig,
 } from "../../src/config/index.js";
@@ -16,7 +17,7 @@ import {
 // ----------------------------------------------------------------------------
 
 const VALID_CONFIG_TOML = `
-[sentry]
+[sources.sentry]
 organization = "my-org"
 project = "my-project"
 team = "my-team"
@@ -36,7 +37,7 @@ page_size = 50
 `;
 
 const CONFIG_WITH_ENV_VARS = `
-[sentry]
+[sources.sentry]
 organization = "my-org"
 project = "my-project"
 team = "my-team"
@@ -61,7 +62,7 @@ organization = "missing bracket"
 `;
 
 const INVALID_SCHEMA_CONFIG = `
-[sentry]
+[sources.sentry]
 organization = "my-org"
 # Missing required fields
 
@@ -162,14 +163,16 @@ const mockFileSystem = (files: Record<string, string>): Layer.Layer<FileSystem.F
 // ----------------------------------------------------------------------------
 
 describe("GlassConfigSchema", () => {
-	it("decodes valid TOML-parsed config", () => {
+	it("decodes valid TOML-parsed config with sentry source", () => {
 		const input = {
-			sentry: {
-				organization: "my-org",
-				project: "my-project",
-				team: "my-team",
-				auth_token: "secret",
-				region: "us" as const,
+			sources: {
+				sentry: {
+					organization: "my-org",
+					project: "my-project",
+					team: "my-team",
+					auth_token: "secret",
+					region: "us" as const,
+				},
 			},
 			opencode: {
 				analyze_model: "model-a",
@@ -186,22 +189,38 @@ describe("GlassConfigSchema", () => {
 
 		const result = Schema.decodeUnknownSync(GlassConfigSchema)(input);
 
-		expect(result.sentry.organization).toBe("my-org");
-		expect(result.sentry.authToken).toBeInstanceOf(Redacted.make("").constructor);
-		expect(Redacted.value(result.sentry.authToken)).toBe("secret");
+		expect(Option.isSome(result.sources.sentry)).toBe(true);
+		const sentry = getSentryConfig(result);
+		expect(sentry.organization).toBe("my-org");
+		expect(sentry.authToken).toBeInstanceOf(Redacted.make("").constructor);
+		expect(Redacted.value(sentry.authToken)).toBe("secret");
 		expect(result.opencode.analyzeModel).toBe("model-a");
 		expect(result.worktree.createCommand).toBe("git worktree add {path} -b {branch}");
 		expect(result.display.pageSize).toBe(50);
 	});
 
+	it("decodes config without sentry source", () => {
+		const input = {
+			sources: {},
+			opencode: { analyze_model: "m", fix_model: "m" },
+			worktree: { create_command: "c", parent_directory: "p" },
+			display: { page_size: 50 },
+		};
+
+		const result = Schema.decodeUnknownSync(GlassConfigSchema)(input);
+		expect(Option.isNone(result.sources.sentry)).toBe(true);
+	});
+
 	it("rejects invalid region", () => {
 		const input = {
-			sentry: {
-				organization: "my-org",
-				project: "my-project",
-				team: "my-team",
-				auth_token: "secret",
-				region: "invalid",
+			sources: {
+				sentry: {
+					organization: "my-org",
+					project: "my-project",
+					team: "my-team",
+					auth_token: "secret",
+					region: "invalid",
+				},
 			},
 			opencode: { analyze_model: "m", fix_model: "m" },
 			worktree: { create_command: "c", parent_directory: "p" },
@@ -211,9 +230,11 @@ describe("GlassConfigSchema", () => {
 		expect(() => Schema.decodeUnknownSync(GlassConfigSchema)(input)).toThrow();
 	});
 
-	it("rejects missing required fields", () => {
+	it("rejects missing required fields in sentry", () => {
 		const input = {
-			sentry: { organization: "my-org" },
+			sources: {
+				sentry: { organization: "my-org" },
+			},
 			opencode: { analyze_model: "m", fix_model: "m" },
 			worktree: { create_command: "c", parent_directory: "p" },
 			display: { page_size: 50 },
@@ -320,10 +341,11 @@ describe("loadConfig", () => {
 				),
 			);
 
-			expect(config.sentry.organization).toBe("my-org");
-			expect(config.sentry.project).toBe("my-project");
-			expect(config.sentry.region).toBe("us");
-			expect(Redacted.value(config.sentry.authToken)).toBe("secret-token");
+			const sentry = getSentryConfig(config);
+			expect(sentry.organization).toBe("my-org");
+			expect(sentry.project).toBe("my-project");
+			expect(sentry.region).toBe("us");
+			expect(Redacted.value(sentry.authToken)).toBe("secret-token");
 			expect(config.opencode.analyzeModel).toBe("anthropic/claude-sonnet-4-20250514");
 			expect(config.worktree.parentDirectory).toBe("../glass-worktrees");
 			expect(config.display.pageSize).toBe(50);
@@ -340,7 +362,8 @@ describe("loadConfig", () => {
 				),
 			);
 
-			expect(config.sentry.organization).toBe("my-org");
+			const sentry = getSentryConfig(config);
+			expect(sentry.organization).toBe("my-org");
 		}),
 	);
 
@@ -360,9 +383,10 @@ describe("loadConfig", () => {
 					),
 				);
 
-				expect(Redacted.value(config.sentry.authToken)).toBe("my-secret-token");
+				const sentry = getSentryConfig(config);
+				expect(Redacted.value(sentry.authToken)).toBe("my-secret-token");
 				expect(config.opencode.analyzeModel).toBe("custom/model");
-				expect(config.sentry.region).toBe("de");
+				expect(sentry.region).toBe("de");
 				expect(config.display.pageSize).toBe(25);
 			} finally {
 				restoreEnvVar("SENTRY_AUTH_TOKEN", originalToken);
@@ -453,7 +477,8 @@ describe("ConfigLive", () => {
 		Effect.gen(function* () {
 			const config = yield* Config;
 
-			expect(config.sentry.organization).toBe("my-org");
+			const sentry = getSentryConfig(config);
+			expect(sentry.organization).toBe("my-org");
 		}).pipe(
 			Effect.provide(ConfigLive("/test/glass.toml")),
 			Effect.provide(

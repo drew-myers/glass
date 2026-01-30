@@ -31,19 +31,111 @@ export interface IssueSourceCommon {
 	readonly userCount?: number;
 }
 
+// =============================================================================
+// Sentry-specific Types
+// =============================================================================
+
+/**
+ * A single frame in a stacktrace.
+ * Contains file location, function name, and optional source context.
+ */
+export interface StackFrame {
+	/** Relative or short filename */
+	readonly filename: string;
+	/** Full absolute path or URL */
+	readonly absPath: string | null;
+	/** Function/method name */
+	readonly function: string | null;
+	/** Module/package name */
+	readonly module: string | null;
+	/** Line number (1-indexed) */
+	readonly lineNo: number | null;
+	/** Column number (1-indexed) */
+	readonly colNo: number | null;
+	/** Whether this frame is from user code (vs library) */
+	readonly inApp: boolean;
+	/** Source code context: array of [lineNo, code] tuples */
+	readonly context?: readonly (readonly [number, string])[];
+	/** Local variables captured at this frame */
+	readonly vars?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * A stacktrace consisting of multiple frames.
+ * Frames are ordered from oldest to newest (caller to callee).
+ */
+export interface Stacktrace {
+	readonly frames: readonly StackFrame[];
+	readonly hasSystemFrames: boolean;
+}
+
+/**
+ * A breadcrumb representing an event that happened before the error.
+ * Used to understand the sequence of actions leading to an error.
+ */
+export interface Breadcrumb {
+	/** Breadcrumb type (e.g., "default", "http", "navigation") */
+	readonly type: string;
+	/** Category for grouping (e.g., "xhr", "console", "ui.click") */
+	readonly category: string;
+	/** Severity level */
+	readonly level: string;
+	/** Human-readable message */
+	readonly message: string | null;
+	/** ISO 8601 timestamp */
+	readonly timestamp: string;
+	/** Type-specific data */
+	readonly data?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Exception mechanism info (how the exception was captured).
+ */
+export interface ExceptionMechanism {
+	readonly type: string;
+	readonly handled: boolean;
+}
+
+/**
+ * A single exception value with type, message, and stacktrace.
+ */
+export interface ExceptionValue {
+	/** Exception class/type name (e.g., "TypeError", "ValueError") */
+	readonly type: string;
+	/** Exception message */
+	readonly value: string;
+	/** Module where exception is defined */
+	readonly module: string | null;
+	/** How the exception was captured */
+	readonly mechanism: ExceptionMechanism | null;
+	/** Stacktrace at the point of the exception */
+	readonly stacktrace: Stacktrace | null;
+}
+
 /**
  * Sentry-specific issue data.
- * Will be expanded with full Sentry API response fields in gla-jw8k.
+ * Contains all the information needed for analysis and display.
  */
 export interface SentrySourceData extends IssueSourceCommon {
+	/** Culprit (usually file:function where error occurred) */
 	readonly culprit: string;
+	/** Issue metadata with error type/value */
 	readonly metadata: {
 		readonly type?: string;
 		readonly value?: string;
 		readonly filename?: string;
 		readonly function?: string;
 	};
-	// Future: stacktrace, breadcrumbs, environment, release, tags
+	/** Exception values with stacktraces (from latest event) */
+	readonly exceptions?: readonly ExceptionValue[];
+	/** Breadcrumbs leading up to the error (from latest event) */
+	readonly breadcrumbs?: readonly Breadcrumb[];
+	/** Environment where error occurred (e.g., "production") */
+	readonly environment?: string;
+	/** Release version */
+	readonly release?: string;
+	/** Event tags as key-value pairs */
+	readonly tags?: Readonly<Record<string, string>>;
 }
 
 /**

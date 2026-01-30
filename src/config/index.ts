@@ -35,10 +35,11 @@ export type {
 	OpenCodeConfig,
 	WorktreeConfig,
 	DisplayConfig,
+	SourcesConfig,
 } from "./schema.js";
 
 // Re-export schema for advanced use cases (e.g., testing)
-export { GlassConfigSchema } from "./schema.js";
+export { GlassConfigSchema, hasSentrySource, getSentryConfig } from "./schema.js";
 
 // Re-export loader functionality
 export {

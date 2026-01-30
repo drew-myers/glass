@@ -1,6 +1,6 @@
 ---
 id: gla-jw8k
-status: open
+status: closed
 deps: [gla-zrqi]
 links: []
 created: 2026-01-30T17:04:58Z
@@ -60,3 +60,42 @@ The domain model now uses `IssueSource` tagged union. This ticket should:
 4. Config is now under `[sources.sentry]` section (see DESIGN.md Configuration)
 
 See DESIGN.md Domain Model > Issue Source Abstraction for details.
+
+**2026-01-30T16:12:00Z**
+
+## Implementation Complete
+
+### Files Created
+- `src/services/sentry/errors.ts` - Tagged error union (AuthError, NotFoundError, RateLimitError, NetworkError, ApiError)
+- `src/services/sentry/types.ts` - Effect Schemas for Sentry API responses including stacktrace, breadcrumbs, exceptions
+- `src/services/sentry/client.ts` - SentryService with listIssues, getIssue, getLatestEvent methods
+- `src/services/sentry/index.ts` - Module re-exports
+- `src/db/migrations/0002_sentry_event_fields.ts` - Migration for new columns (environment, release, tags, exceptions, breadcrumbs)
+- `test/services/sentry/client.test.ts` - Tests for pagination helpers and error types
+
+### Files Modified
+- `src/config/schema.ts` - Changed from `sentry` to `sources.sentry` with Option wrapper
+- `src/config/index.ts` - Added new exports (hasSentrySource, getSentryConfig)
+- `src/domain/issue.ts` - Expanded SentrySourceData with Stacktrace, StackFrame, Breadcrumb, ExceptionValue types
+- `src/db/repositories/issues.ts` - Handle new fields in upsert/read operations
+- `src/db/migrations.ts` - Registered new migration
+- `test/config/loader.test.ts` - Updated TOML fixtures to use `[sources.sentry]` format
+
+### Key Design Decisions
+1. Config uses `[sources.sentry]` structure with Option wrapper for future multi-source support
+2. Default query: `is:unresolved assigned:#${team}` 
+3. Pagination: Fetches all pages automatically via Link header parsing (max 10 pages safety limit)
+4. Rate limiting: Returns SentryRateLimitError with retry-after info, caller decides retry strategy
+5. Database: Structured columns for environment/release, JSON for tags/exceptions/breadcrumbs
+6. `listIssues` returns basic data; `getLatestEvent` fetches full stacktrace/breadcrumbs on demand
+
+### API
+```typescript
+interface SentryServiceImpl {
+  listIssues(options?: ListIssuesOptions): Effect<IssueSource[], SentryError>
+  getIssue(issueId: string): Effect<IssueSource, SentryError>
+  getLatestEvent(issueId: string): Effect<SentryEventData, SentryError>
+}
+```
+
+All 194 tests pass, typecheck clean, biome check clean.

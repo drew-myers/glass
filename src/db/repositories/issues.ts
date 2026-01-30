@@ -7,7 +7,14 @@
 
 import { SqlClient } from "@effect/sql";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import type { Issue, IssueSource, IssueState, SentrySourceData } from "../../domain/issue.js";
+import type {
+	Breadcrumb,
+	ExceptionValue,
+	Issue,
+	IssueSource,
+	IssueState,
+	SentrySourceData,
+} from "../../domain/issue.js";
 import {
 	IssueSource as IssueSourceEnum,
 	IssueState as IssueStateEnum,
@@ -44,6 +51,11 @@ const SentryMetadataSchema = Schema.Struct({
 });
 
 /**
+ * Schema for tags stored as JSON in the database.
+ */
+const TagsSchema = Schema.Record({ key: Schema.String, value: Schema.String });
+
+/**
  * Schema for a Sentry issue row from the database.
  * Handles type transformations like TEXT dates to Date objects.
  */
@@ -58,6 +70,13 @@ const SentryIssueRowSchema = Schema.Struct({
 	count: Schema.NullOr(Schema.Number),
 	user_count: Schema.NullOr(Schema.Number),
 	metadata: Schema.parseJson(SentryMetadataSchema),
+	// New event detail fields
+	environment: Schema.NullOr(Schema.String),
+	release: Schema.NullOr(Schema.String),
+	tags: Schema.NullOr(Schema.parseJson(TagsSchema)),
+	exceptions: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
+	breadcrumbs: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
+	// Workflow state fields
 	status: Schema.String,
 	analysis_session_id: Schema.NullOr(Schema.String),
 	fix_session_id: Schema.NullOr(Schema.String),
@@ -164,6 +183,12 @@ const rowToIssue = (row: SentryIssueRow): Issue => {
 		metadata: buildMetadata(row),
 		...(row.count !== null ? { count: row.count } : {}),
 		...(row.user_count !== null ? { userCount: row.user_count } : {}),
+		// New event detail fields
+		...(row.environment !== null ? { environment: row.environment } : {}),
+		...(row.release !== null ? { release: row.release } : {}),
+		...(row.tags !== null ? { tags: row.tags } : {}),
+		...(row.exceptions !== null ? { exceptions: row.exceptions as readonly ExceptionValue[] } : {}),
+		...(row.breadcrumbs !== null ? { breadcrumbs: row.breadcrumbs as readonly Breadcrumb[] } : {}),
 	};
 
 	const source: IssueSource = IssueSourceEnum.Sentry({
@@ -340,14 +365,23 @@ const make = Effect.gen(function* () {
 			const firstSeen = issue.data.firstSeen.toISOString();
 			const lastSeen = issue.data.lastSeen.toISOString();
 
+			// Serialize optional JSON fields
+			const tagsJson = issue.data.tags ? JSON.stringify(issue.data.tags) : null;
+			const exceptionsJson = issue.data.exceptions ? JSON.stringify(issue.data.exceptions) : null;
+			const breadcrumbsJson = issue.data.breadcrumbs
+				? JSON.stringify(issue.data.breadcrumbs)
+				: null;
+
 			yield* sql`
         INSERT INTO sentry_issues (
           id, project, title, short_id, culprit, 
           first_seen, last_seen, count, user_count, metadata,
+          environment, release, tags, exceptions, breadcrumbs,
           status
         ) VALUES (
           ${issue.id}, ${issue.project}, ${issue.data.title}, ${issue.data.shortId}, ${issue.data.culprit},
           ${firstSeen}, ${lastSeen}, ${issue.data.count ?? null}, ${issue.data.userCount ?? null}, ${metadataJson},
+          ${issue.data.environment ?? null}, ${issue.data.release ?? null}, ${tagsJson}, ${exceptionsJson}, ${breadcrumbsJson},
           'pending'
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -359,7 +393,12 @@ const make = Effect.gen(function* () {
           last_seen = ${lastSeen},
           count = ${issue.data.count ?? null},
           user_count = ${issue.data.userCount ?? null},
-          metadata = ${metadataJson}
+          metadata = ${metadataJson},
+          environment = ${issue.data.environment ?? null},
+          release = ${issue.data.release ?? null},
+          tags = ${tagsJson},
+          exceptions = ${exceptionsJson},
+          breadcrumbs = ${breadcrumbsJson}
       `;
 
 			// Return the upserted issue

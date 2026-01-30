@@ -13,6 +13,7 @@ import { Effect, type Layer } from "effect";
 
 // Import migrations
 import migration0001 from "./migrations/0001_initial_schema.js";
+import migration0002 from "./migrations/0002_sentry_event_fields.js";
 
 /**
  * Array of all migrations in order.
@@ -21,6 +22,7 @@ import migration0001 from "./migrations/0001_initial_schema.js";
  */
 const migrations: Migrator.ResolvedMigration[] = [
 	[1, "initial_schema", Effect.succeed(migration0001)],
+	[2, "sentry_event_fields", Effect.succeed(migration0002)],
 ];
 
 /**

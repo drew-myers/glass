@@ -7,7 +7,7 @@
  * @module
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 /**
  * Schema for Sentry configuration section.
@@ -130,11 +130,22 @@ export const DisplayConfigSchema = Schema.transform(
 export type DisplayConfig = typeof DisplayConfigSchema.Type;
 
 /**
+ * Schema for the sources configuration section.
+ * Each source is optional and can be enabled/disabled independently.
+ */
+export const SourcesConfigSchema = Schema.Struct({
+	sentry: Schema.optionalWith(SentryConfigSchema, { as: "Option" }),
+	// Future: github, ticket sources
+});
+
+export type SourcesConfig = typeof SourcesConfigSchema.Type;
+
+/**
  * Schema for the complete Glass configuration file.
  * Combines all section schemas into a single configuration schema.
  */
 export const GlassConfigSchema = Schema.Struct({
-	sentry: SentryConfigSchema,
+	sources: SourcesConfigSchema,
 	opencode: OpenCodeConfigSchema,
 	worktree: WorktreeConfigSchema,
 	display: DisplayConfigSchema,
@@ -151,3 +162,16 @@ export type GlassConfig = typeof GlassConfigSchema.Type;
  * All field names are snake_case.
  */
 export type GlassConfigEncoded = typeof GlassConfigSchema.Encoded;
+
+/**
+ * Helper to check if Sentry source is configured.
+ */
+export const hasSentrySource = (config: GlassConfig): boolean =>
+	Option.isSome(config.sources.sentry);
+
+/**
+ * Helper to get Sentry config, throwing if not configured.
+ * Use only when you've already checked hasSentrySource.
+ */
+export const getSentryConfig = (config: GlassConfig): SentryConfig =>
+	Option.getOrThrow(config.sources.sentry);
