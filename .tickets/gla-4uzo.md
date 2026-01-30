@@ -16,10 +16,10 @@ Implement the review actions for proposed fixes
 
 ## Design
 
-- 'a' key: Approve - transitions to Fixing, creates worktree
+- 'a' key: Approve - transitions to InProgress, creates worktree
 - 'x' key: Reject - transitions to Pending, cleans up session
 - 'c' key: Request changes - prompts for feedback, continues analysis session
-- Actions only available in Proposed state
+- Actions only available in PendingApproval state
 - Visual feedback on action taken
 - Confirmation for reject?
 
@@ -28,5 +28,5 @@ Implement the review actions for proposed fixes
 - All three actions work correctly
 - State transitions appropriately
 - Request changes continues conversation
-- Actions disabled for non-proposed states
+- Actions disabled for non-PendingApproval states
 

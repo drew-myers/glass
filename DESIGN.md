@@ -73,7 +73,7 @@ Glass manages multiple OpenCode server instances:
 ```
 
 - **Analysis phase**: Uses the shared main project OpenCode server (read-only operations)
-- **Fix phase**: Each worktree gets its own OpenCode server instance (can write files)
+- **Implementation phase**: Each worktree gets its own OpenCode server instance (can write files)
 
 ---
 
@@ -85,10 +85,10 @@ Glass manages multiple OpenCode server instances:
 type IssueState = 
   | { _tag: "Pending" }
   | { _tag: "Analyzing"; sessionId: string }
-  | { _tag: "Proposed"; sessionId: string; proposal: string }
-  | { _tag: "Fixing"; analysisSessionId: string; fixSessionId: string; worktreePath: string; worktreeBranch: string }
-  | { _tag: "Fixed"; analysisSessionId: string; fixSessionId: string; worktreePath: string; worktreeBranch: string }
-  | { _tag: "Error"; previousState: "analyzing" | "fixing"; sessionId: string; error: string }
+  | { _tag: "PendingApproval"; sessionId: string; proposal: string }
+  | { _tag: "InProgress"; analysisSessionId: string; implementationSessionId: string; worktreePath: string; worktreeBranch: string }
+  | { _tag: "PendingReview"; analysisSessionId: string; implementationSessionId: string; worktreePath: string; worktreeBranch: string }
+  | { _tag: "Error"; previousState: "analyzing" | "in_progress"; sessionId: string; error: string }
 ```
 
 ### State Transitions
@@ -99,7 +99,7 @@ PENDING ──[start analysis]──▶ ANALYZING
                     ┌─────────────┼─────────────┐
                     │             │             │
                     ▼             ▼             │
-                 ERROR        PROPOSED      (agent asks questions,
+                 ERROR     PENDING_APPROVAL (agent asks questions,
                     │             │          user responds, continues)
       [retry]───────┘             │
                     ┌─────────────┼─────────────┐
@@ -107,12 +107,12 @@ PENDING ──[start analysis]──▶ ANALYZING
                 [reject]    [request       [approve]
                     │        changes]          │
                     ▼             │             ▼
-                PENDING ◀────────┘          FIXING
+                PENDING ◀────────┘         IN_PROGRESS
                                                │
                                  ┌─────────────┼─────────────┐
                                  │             │             │
                                  ▼             ▼             │
-                              ERROR         FIXED      (agent asks questions,
+                              ERROR     PENDING_REVIEW  (agent asks questions,
                                  │             │        user responds, continues)
                    [retry]───────┘             │
                                                │
@@ -127,14 +127,14 @@ PENDING ──[start analysis]──▶ ANALYZING
 | From State | Action | To State |
 |------------|--------|----------|
 | Pending | StartAnalysis | Analyzing |
-| Analyzing | CompleteAnalysis | Proposed |
+| Analyzing | CompleteAnalysis | PendingApproval |
 | Analyzing | Fail | Error |
-| Proposed | Approve | Fixing |
-| Proposed | Reject | Pending |
-| Proposed | RequestChanges | Analyzing (same session) |
-| Fixing | CompleteFix | Fixed |
-| Fixing | Fail | Error |
-| Fixed | Cleanup | Pending |
+| PendingApproval | Approve | InProgress |
+| PendingApproval | Reject | Pending |
+| PendingApproval | RequestChanges | Analyzing (same session) |
+| InProgress | Complete | PendingReview |
+| InProgress | Fail | Error |
+| PendingReview | Cleanup | Pending |
 | Error | Retry | Analyzing (new session) |
 | Error | Reject | Pending |
 
@@ -227,21 +227,21 @@ Examples:
 export type IssueState = Data.TaggedEnum<{
   Pending: {}
   Analyzing: { sessionId: string }
-  Proposed: { sessionId: string; proposal: string }
-  Fixing: { 
+  PendingApproval: { sessionId: string; proposal: string }
+  InProgress: { 
     analysisSessionId: string
-    fixSessionId: string
+    implementationSessionId: string
     worktreePath: string
     worktreeBranch: string
   }
-  Fixed: {
+  PendingReview: {
     analysisSessionId: string
-    fixSessionId: string
+    implementationSessionId: string
     worktreePath: string
     worktreeBranch: string
   }
   Error: { 
-    previousState: "analyzing" | "fixing"
+    previousState: "analyzing" | "in_progress"
     sessionId: string
     error: string 
   }
@@ -251,10 +251,10 @@ export type IssueState = Data.TaggedEnum<{
 export type IssueAction = Data.TaggedEnum<{
   StartAnalysis: { sessionId: string }
   CompleteAnalysis: { proposal: string }
-  Approve: { worktreePath: string; worktreeBranch: string; fixSessionId: string }
+  Approve: { worktreePath: string; worktreeBranch: string; implementationSessionId: string }
   Reject: {}
   RequestChanges: { feedback: string }
-  CompleteFix: {}
+  Complete: {}
   Fail: { error: string }
   Retry: { newSessionId: string }
   Cleanup: {}
@@ -286,7 +286,7 @@ export interface ConversationMessage {
   readonly id: number
   readonly issueId: string
   readonly sessionId: string
-  readonly phase: "analysis" | "fix"
+  readonly phase: "analysis" | "implementation"
   readonly role: "user" | "assistant"
   readonly content: string
   readonly createdAt: Date
@@ -341,7 +341,7 @@ interface IssueRepository {
 // Conversation Repository (Database)
 interface ConversationRepository {
   appendMessage: (msg: Omit<ConversationMessage, "id" | "createdAt">) => Effect<ConversationMessage, DbError>
-  getMessages: (issueId: string, phase?: "analysis" | "fix") => Effect<ConversationMessage[], DbError>
+  getMessages: (issueId: string, phase?: "analysis" | "implementation") => Effect<ConversationMessage[], DbError>
   saveProposal: (issueId: string, content: string) => Effect<Proposal, DbError>
   getProposal: (issueId: string) => Effect<Proposal | null, DbError>
 }
@@ -400,7 +400,7 @@ CREATE TABLE issues (
     source_data JSON NOT NULL,              -- Source-specific data (SentrySourceData, etc.)
     
     status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(status IN ('pending', 'analyzing', 'proposed', 'fixing', 'fixed', 'error')),
+        CHECK(status IN ('pending', 'analyzing', 'pending_approval', 'in_progress', 'pending_review', 'error')),
     
     -- Session references
     analysis_session_id TEXT,
@@ -427,7 +427,7 @@ CREATE TABLE conversation_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
     session_id TEXT NOT NULL,
-    phase TEXT NOT NULL CHECK(phase IN ('analysis', 'fix')),
+    phase TEXT NOT NULL CHECK(phase IN ('analysis', 'implementation')),
     role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -464,9 +464,9 @@ END;
 
 1. Load config from TOML file
 2. Initialize database (run migrations if needed)
-3. Validate worktrees still exist for fixing/fixed issues
+3. Validate worktrees still exist for in_progress/pending_review issues
 4. Start main OpenCode server for project
-5. Reconnect any active sessions (issues in analyzing/proposed/fixing states)
+5. Reconnect any active sessions (issues in analyzing/pending_approval/in_progress states)
 6. Fetch fresh issues from enabled sources (Sentry, GitHub, tickets, etc.)
 7. Start TUI
 
@@ -569,9 +569,9 @@ glass /path/to/project --config /path/to/glass.toml
 │                                                                             │
 │   STATUS   ISSUE                                      EVENTS   LAST SEEN    │
 │   ──────   ─────                                      ──────   ─────────    │
-│   ● FIXED  TypeError: Cannot read property 'id'        127    2 hours ago   │
-│   ◐ FIXING ReferenceError: user is not defined          43    3 hours ago   │
-│ ▶ ◉ REVIEW SyntaxError in config parser                891    1 hour ago    │
+│   ● REVIEW TypeError: Cannot read property 'id'        127    2 hours ago   │
+│   ◐ IMPL   ReferenceError: user is not defined          43    3 hours ago   │
+│ ▶ ◉ APPRVL SyntaxError in config parser                891    1 hour ago    │
 │   ◐ ANALYZ NetworkError: Failed to fetch               234    30 mins ago   │
 │   ○        ValidationError: Invalid email format        56    4 hours ago   │
 │   ○        TimeoutError: Request timed out              12    1 day ago     │
@@ -586,7 +586,7 @@ glass /path/to/project --config /path/to/glass.toml
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ ← SyntaxError in config parser                                    ◉ REVIEW  │
+│ ← SyntaxError in config parser                                    ◉ APPRVL  │
 ├────────────────────────────────────┬────────────────────────────────────────┤
 │ SENTRY                             │ AGENT                                  │
 │ ────────────────────────────────── │ ────────────────────────────────────── │
@@ -609,7 +609,7 @@ glass /path/to/project --config /path/to/glass.toml
 │ Environment: production            │ ```                                    │
 │ Release: v2.3.1                    │                                        │
 │ Events: 891 │ Users: 234           │ ─── FIX ───                            │
-│ First: 3 days ago │ Last: 1h ago   │ (shown when in fixing/fixed state)     │
+│ First: 3 days ago │ Last: 1h ago   │ (shown when in in_progress/pending_review)│
 │                                    │                                        │
 ├────────────────────────────────────┼────────────────────────────────────────┤
 │ [a]pprove  [x] reject  [c]hanges   │ > _                                    │
@@ -632,9 +632,9 @@ glass /path/to/project --config /path/to/glass.toml
 |--------|------|-------|-------------|
 | `pending` | `○` | dim/gray | Not started |
 | `analyzing` | `◐` | yellow | Agent analyzing |
-| `proposed` | `◉` | cyan | Awaiting review |
-| `fixing` | `◐` | blue | Agent fixing |
-| `fixed` | `●` | green | Fix complete, awaiting user action |
+| `pending_approval` | `◉` | cyan | Awaiting approval |
+| `in_progress` | `◐` | blue | Agent implementing |
+| `pending_review` | `●` | green | Implementation complete, awaiting review |
 | `error` | `✗` | red | Error occurred |
 
 ### Keybindings
@@ -657,10 +657,10 @@ glass /path/to/project --config /path/to/glass.toml
 - `Enter` - focus input (when agent pane focused)
 - `Esc` - unfocus input
 - `s` - start analysis (when in PENDING state)
-- `a` - approve (when in PROPOSED state)
-- `x` - reject (when in PROPOSED state)
-- `c` - request changes (when in PROPOSED state)
-- `d` - cleanup worktree (when in FIXED state)
+- `a` - approve (when in PENDING_APPROVAL state)
+- `x` - reject (when in PENDING_APPROVAL state)
+- `c` - request changes (when in PENDING_APPROVAL state)
+- `d` - cleanup worktree (when in PENDING_REVIEW state)
 - `R` - retry (when in ERROR state)
 
 ---
@@ -702,10 +702,10 @@ The agent has full codebase access during analysis to:
 2. Understand the context around the error
 3. Propose a specific fix with rationale
 
-### Fix Prompt Template
+### Implementation Prompt Template
 
-The fix prompt includes:
-- Original Sentry issue data
+The implementation prompt includes:
+- Original issue data
 - Approved proposal from analysis
 - Instructions to implement the fix
 
@@ -821,10 +821,10 @@ glass/
 4. Detect proposal completion
 5. Approve/reject/request changes actions
 
-### Phase 5: Fix Workflow
+### Phase 5: Implementation Workflow
 1. Git worktree creation
-2. Start fix in worktree
-3. Stream fix progress
+2. Start implementation in worktree
+3. Stream implementation progress
 4. Completion detection
 5. Worktree cleanup action
 

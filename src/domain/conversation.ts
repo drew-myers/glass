@@ -15,8 +15,8 @@ export interface ConversationMessage {
 	readonly issueId: string;
 	/** The OpenCode session ID */
 	readonly sessionId: string;
-	/** The workflow phase: analysis or fix */
-	readonly phase: "analysis" | "fix";
+	/** The workflow phase: analysis or implementation */
+	readonly phase: "analysis" | "implementation";
 	/** Who sent the message */
 	readonly role: "user" | "assistant";
 	/** The message content (may contain markdown) */

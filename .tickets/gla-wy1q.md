@@ -8,23 +8,23 @@ type: task
 priority: 2
 assignee: Drew Myers
 parent: gla-uyi9
-tags: [fix, core]
+tags: [implementation, core]
 ---
-# Fix completion and Fixed state
+# Implementation completion and PendingReview state
 
-Detect fix completion and transition to Fixed state
+Detect implementation completion and transition to PendingReview state
 
 ## Design
 
 - Detect completion via MessageComplete + idle status
-- Transition to Fixed state (preserve worktree info)
+- Transition to PendingReview state (preserve worktree info)
 - Update UI to show completion and cleanup option
 - Persist final state
 
 ## Acceptance Criteria
 
-- Detects when agent finishes fix
-- Transitions to Fixed state
+- Detects when agent finishes implementation
+- Transitions to PendingReview state
 - Worktree info preserved
 - UI shows cleanup option
 

@@ -93,18 +93,20 @@ describe("ConversationRepository", () => {
 				yield* repo.appendMessage(
 					makeMessage("issue-1", { phase: "analysis", content: "Analysis 1" }),
 				);
-				yield* repo.appendMessage(makeMessage("issue-1", { phase: "fix", content: "Fix 1" }));
+				yield* repo.appendMessage(
+					makeMessage("issue-1", { phase: "implementation", content: "Implementation 1" }),
+				);
 				yield* repo.appendMessage(
 					makeMessage("issue-1", { phase: "analysis", content: "Analysis 2" }),
 				);
 
 				const analysisMessages = yield* repo.getMessages("issue-1", "analysis");
-				const fixMessages = yield* repo.getMessages("issue-1", "fix");
+				const implementationMessages = yield* repo.getMessages("issue-1", "implementation");
 
 				expect(analysisMessages.length).toBe(2);
-				expect(fixMessages.length).toBe(1);
+				expect(implementationMessages.length).toBe(1);
 				expect(analysisMessages[0]?.content).toBe("Analysis 1");
-				expect(fixMessages[0]?.content).toBe("Fix 1");
+				expect(implementationMessages[0]?.content).toBe("Implementation 1");
 			}).pipe(Effect.provide(TestLayer)),
 		);
 

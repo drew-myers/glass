@@ -16,8 +16,8 @@ Implement the Issue domain model with Effect tagged unions and state machine
 
 ## Design
 
-- IssueState tagged enum: Pending, Analyzing, Proposed, Fixing, Fixed, Error
-- IssueAction tagged enum: StartAnalysis, CompleteAnalysis, Approve, Reject, RequestChanges, CompleteFix, Fail, Retry, Cleanup
+- IssueState tagged enum: Pending, Analyzing, PendingApproval, InProgress, PendingReview, Error
+- IssueAction tagged enum: StartAnalysis, CompleteAnalysis, Approve, Reject, RequestChanges, Complete, Fail, Retry, Cleanup
 - IssueEvent tagged enum for pub/sub: StateChanged, AgentMessage, AgentWaitingForInput, AgentComplete, AgentError
 - transition() function that validates and performs state transitions
 - ConversationMessage and Proposal types
@@ -40,8 +40,8 @@ Implement the Issue domain model with Effect tagged unions and state machine
 ### Files Created
 - `src/domain/errors.ts` - InvalidTransitionError tagged error
 - `src/domain/issue.ts` - Core domain model:
-  - `IssueState` TaggedEnum (Pending, Analyzing, Proposed, Fixing, Fixed, Error)
-  - `IssueAction` TaggedEnum (StartAnalysis, CompleteAnalysis, Approve, Reject, RequestChanges, CompleteFix, Fail, Retry, Cleanup)
+  - `IssueState` TaggedEnum (Pending, Analyzing, PendingApproval, InProgress, PendingReview, Error)
+  - `IssueAction` TaggedEnum (StartAnalysis, CompleteAnalysis, Approve, Reject, RequestChanges, Complete, Fail, Retry, Cleanup)
   - `IssueEvent` TaggedEnum (StateChanged, AgentMessage, AgentWaitingForInput, AgentComplete, AgentError)
   - `Issue` interface with SentryIssueData placeholder
   - `transition()` function with exhaustive pattern matching via Effect Match
@@ -56,7 +56,7 @@ Implement the Issue domain model with Effect tagged unions and state machine
 - Used `Data.TaggedEnum` for type-safe discriminated unions
 - `transition()` returns `Effect<IssueState, InvalidTransitionError>` for composability
 - `SentryIssueData` is a placeholder - will be expanded in gla-jw8k (Sentry API client)
-- Error state tracks `previousState` ("analyzing" | "fixing") for better error context
+- Error state tracks `previousState` ("analyzing" | "in_progress") for better error context
 
 All tests pass (44 total), typecheck clean, lint clean.
 

@@ -245,16 +245,16 @@ describe("SentryIssueRepository", () => {
 			}).pipe(Effect.provide(TestLayer)),
 		);
 
-		it.effect("stores Fixing state with all fields", () =>
+		it.effect("stores InProgress state with all fields", () =>
 			Effect.gen(function* () {
 				const repo = yield* SentryIssueRepository;
 				yield* repo.upsert(makeSentryIssue("state-2"));
 
 				yield* repo.updateState(
 					"state-2",
-					IssueState.Fixing({
+					IssueState.InProgress({
 						analysisSessionId: "analysis-1",
-						fixSessionId: "fix-1",
+						implementationSessionId: "fix-1",
 						worktreePath: "/worktrees/state-2",
 						worktreeBranch: "fix/state-2",
 					}),
@@ -262,9 +262,9 @@ describe("SentryIssueRepository", () => {
 
 				const issue = yield* repo.getById("state-2");
 				expect(Option.isSome(issue)).toBe(true);
-				if (Option.isSome(issue) && issue.value.state._tag === "Fixing") {
+				if (Option.isSome(issue) && issue.value.state._tag === "InProgress") {
 					expect(issue.value.state.analysisSessionId).toBe("analysis-1");
-					expect(issue.value.state.fixSessionId).toBe("fix-1");
+					expect(issue.value.state.implementationSessionId).toBe("fix-1");
 					expect(issue.value.state.worktreePath).toBe("/worktrees/state-2");
 					expect(issue.value.state.worktreeBranch).toBe("fix/state-2");
 				}
@@ -301,29 +301,29 @@ describe("getStatusFromState", () => {
 	it("returns correct status for each state type", () => {
 		expect(getStatusFromState(IssueState.Pending())).toBe("pending");
 		expect(getStatusFromState(IssueState.Analyzing({ sessionId: "s" }))).toBe("analyzing");
-		expect(getStatusFromState(IssueState.Proposed({ sessionId: "s", proposal: "p" }))).toBe(
-			"proposed",
+		expect(getStatusFromState(IssueState.PendingApproval({ sessionId: "s", proposal: "p" }))).toBe(
+			"pending_approval",
 		);
 		expect(
 			getStatusFromState(
-				IssueState.Fixing({
+				IssueState.InProgress({
 					analysisSessionId: "a",
-					fixSessionId: "f",
+					implementationSessionId: "f",
 					worktreePath: "/p",
 					worktreeBranch: "b",
 				}),
 			),
-		).toBe("fixing");
+		).toBe("in_progress");
 		expect(
 			getStatusFromState(
-				IssueState.Fixed({
+				IssueState.PendingReview({
 					analysisSessionId: "a",
-					fixSessionId: "f",
+					implementationSessionId: "f",
 					worktreePath: "/p",
 					worktreeBranch: "b",
 				}),
 			),
-		).toBe("fixed");
+		).toBe("pending_review");
 		expect(
 			getStatusFromState(
 				IssueState.Error({ previousState: "analyzing", sessionId: "s", error: "e" }),

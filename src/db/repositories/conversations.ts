@@ -25,7 +25,7 @@ const ConversationMessageRowSchema = Schema.Struct({
 	id: Schema.Number,
 	issue_id: Schema.String,
 	session_id: Schema.String,
-	phase: Schema.Literal("analysis", "fix"),
+	phase: Schema.Literal("analysis", "implementation"),
 	role: Schema.Literal("user", "assistant"),
 	content: Schema.String,
 	created_at: Schema.String,
@@ -92,7 +92,7 @@ export interface ConversationRepositoryService {
 	 */
 	readonly getMessages: (
 		issueId: string,
-		phase?: "analysis" | "fix",
+		phase?: "analysis" | "implementation",
 	) => Effect.Effect<readonly ConversationMessage[], DbError>;
 
 	/**

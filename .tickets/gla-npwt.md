@@ -8,15 +8,15 @@ type: task
 priority: 2
 assignee: Drew Myers
 parent: gla-uyi9
-tags: [ui, fix]
+tags: [ui, implementation]
 ---
 # Worktree cleanup action
 
-Implement the 'd' keybind to cleanup worktree after fix is complete
+Implement the 'd' keybind to cleanup worktree after implementation is complete
 
 ## Design
 
-- 'd' key in detail view when issue is Fixed
+- 'd' key in detail view when issue is PendingReview
 - Confirmation prompt before cleanup
 - Stops worktree OpenCode server
 - Removes worktree via WorktreeService
@@ -25,7 +25,7 @@ Implement the 'd' keybind to cleanup worktree after fix is complete
 
 ## Acceptance Criteria
 
-- 'd' triggers cleanup on fixed issues
+- 'd' triggers cleanup on PendingReview issues
 - Confirmation before action
 - Server stopped, worktree removed
 - State returns to Pending

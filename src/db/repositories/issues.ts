@@ -21,7 +21,13 @@ import { DbError } from "../errors.js";
 /**
  * Valid status values stored in the database.
  */
-export type IssueStatus = "pending" | "analyzing" | "proposed" | "fixing" | "fixed" | "error";
+export type IssueStatus =
+	| "pending"
+	| "analyzing"
+	| "pending_approval"
+	| "in_progress"
+	| "pending_review"
+	| "error";
 
 // =============================================================================
 // Database Row Schemas
@@ -109,32 +115,32 @@ const rowToState = (row: SentryIssueRow): IssueState => {
 				sessionId: row.analysis_session_id ?? "",
 			});
 
-		case "proposed":
-			return IssueStateEnum.Proposed({
+		case "pending_approval":
+			return IssueStateEnum.PendingApproval({
 				sessionId: row.analysis_session_id ?? "",
 				// Proposal content is stored separately in proposals table
 				proposal: "",
 			});
 
-		case "fixing":
-			return IssueStateEnum.Fixing({
+		case "in_progress":
+			return IssueStateEnum.InProgress({
 				analysisSessionId: row.analysis_session_id ?? "",
-				fixSessionId: row.fix_session_id ?? "",
+				implementationSessionId: row.fix_session_id ?? "",
 				worktreePath: row.worktree_path ?? "",
 				worktreeBranch: row.worktree_branch ?? "",
 			});
 
-		case "fixed":
-			return IssueStateEnum.Fixed({
+		case "pending_review":
+			return IssueStateEnum.PendingReview({
 				analysisSessionId: row.analysis_session_id ?? "",
-				fixSessionId: row.fix_session_id ?? "",
+				implementationSessionId: row.fix_session_id ?? "",
 				worktreePath: row.worktree_path ?? "",
 				worktreeBranch: row.worktree_branch ?? "",
 			});
 
 		case "error":
 			return IssueStateEnum.Error({
-				previousState: (row.error_previous_state as "analyzing" | "fixing") ?? "analyzing",
+				previousState: (row.error_previous_state as "analyzing" | "in_progress") ?? "analyzing",
 				sessionId: row.analysis_session_id ?? row.fix_session_id ?? "",
 				error: row.error_message ?? "Unknown error",
 			});
@@ -185,12 +191,12 @@ export const getStatusFromState = (state: IssueState): IssueStatus => {
 			return "pending";
 		case "Analyzing":
 			return "analyzing";
-		case "Proposed":
-			return "proposed";
-		case "Fixing":
-			return "fixing";
-		case "Fixed":
-			return "fixed";
+		case "PendingApproval":
+			return "pending_approval";
+		case "InProgress":
+			return "in_progress";
+		case "PendingReview":
+			return "pending_review";
 		case "Error":
 			return "error";
 	}
@@ -377,18 +383,18 @@ const make = Effect.gen(function* () {
 				case "Analyzing":
 					analysisSessionId = state.sessionId;
 					break;
-				case "Proposed":
+				case "PendingApproval":
 					analysisSessionId = state.sessionId;
 					break;
-				case "Fixing":
+				case "InProgress":
 					analysisSessionId = state.analysisSessionId;
-					fixSessionId = state.fixSessionId;
+					fixSessionId = state.implementationSessionId;
 					worktreePath = state.worktreePath;
 					worktreeBranch = state.worktreeBranch;
 					break;
-				case "Fixed":
+				case "PendingReview":
 					analysisSessionId = state.analysisSessionId;
-					fixSessionId = state.fixSessionId;
+					fixSessionId = state.implementationSessionId;
 					worktreePath = state.worktreePath;
 					worktreeBranch = state.worktreeBranch;
 					break;

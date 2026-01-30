@@ -8,11 +8,11 @@ type: task
 priority: 1
 assignee: Drew Myers
 parent: gla-uyi9
-tags: [fix, core]
+tags: [implementation, core]
 ---
-# Fix workflow implementation
+# Implementation workflow
 
-Implement the full fix workflow: worktree creation, server startup, fix execution
+Implement the full implementation workflow: worktree creation, server startup, implementation execution
 
 ## Design
 
@@ -20,17 +20,17 @@ Implement the full fix workflow: worktree creation, server startup, fix executio
   1. Create worktree via WorktreeService
   2. Start dedicated OpenCode server for worktree
   3. Create session on worktree server
-  4. Send fix prompt with approved proposal
+  4. Send implementation prompt with approved proposal
   5. Stream progress to UI
 - Track worktree server in active servers map
-- Transition to Fixing state with worktree info
-- Handle agent questions during fix
+- Transition to InProgress state with worktree info
+- Handle agent questions during implementation
 
 ## Acceptance Criteria
 
 - Worktree created on approve
 - Dedicated server started for worktree
-- Fix prompt sent with proposal
+- Implementation prompt sent with proposal
 - Progress streams to UI
 - Can respond to agent questions
 

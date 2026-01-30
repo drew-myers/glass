@@ -38,14 +38,14 @@ export default Effect.gen(function* () {
       
       -- Workflow state
       status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(status IN ('pending', 'analyzing', 'proposed', 'fixing', 'fixed', 'error')),
+        CHECK(status IN ('pending', 'analyzing', 'pending_approval', 'in_progress', 'pending_review', 'error')),
       analysis_session_id TEXT,
       fix_session_id TEXT,
       worktree_path TEXT,
       worktree_branch TEXT,
       error_message TEXT,
       error_previous_state TEXT
-        CHECK(error_previous_state IS NULL OR error_previous_state IN ('analyzing', 'fixing')),
+        CHECK(error_previous_state IS NULL OR error_previous_state IN ('analyzing', 'in_progress')),
       
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -62,7 +62,7 @@ export default Effect.gen(function* () {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       issue_id TEXT NOT NULL,
       session_id TEXT NOT NULL,
-      phase TEXT NOT NULL CHECK(phase IN ('analysis', 'fix')),
+      phase TEXT NOT NULL CHECK(phase IN ('analysis', 'implementation')),
       role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
       content TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))

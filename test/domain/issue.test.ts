@@ -17,25 +17,25 @@ import {
 
 const pending = () => IssueState.Pending();
 const analyzing = (sessionId = "session-1") => IssueState.Analyzing({ sessionId });
-const proposed = (sessionId = "session-1", proposal = "Fix the bug") =>
-	IssueState.Proposed({ sessionId, proposal });
-const fixing = (opts?: Partial<Parameters<typeof IssueState.Fixing>[0]>) =>
-	IssueState.Fixing({
+const pendingApproval = (sessionId = "session-1", proposal = "The plan") =>
+	IssueState.PendingApproval({ sessionId, proposal });
+const inProgress = (opts?: Partial<Parameters<typeof IssueState.InProgress>[0]>) =>
+	IssueState.InProgress({
 		analysisSessionId: "session-1",
-		fixSessionId: "fix-session-1",
+		implementationSessionId: "impl-session-1",
 		worktreePath: "/worktrees/issue-123",
 		worktreeBranch: "fix/issue-123",
 		...opts,
 	});
-const fixed = (opts?: Partial<Parameters<typeof IssueState.Fixed>[0]>) =>
-	IssueState.Fixed({
+const pendingReview = (opts?: Partial<Parameters<typeof IssueState.PendingReview>[0]>) =>
+	IssueState.PendingReview({
 		analysisSessionId: "session-1",
-		fixSessionId: "fix-session-1",
+		implementationSessionId: "impl-session-1",
 		worktreePath: "/worktrees/issue-123",
 		worktreeBranch: "fix/issue-123",
 		...opts,
 	});
-const error = (previousState: "analyzing" | "fixing", sessionId = "session-1") =>
+const error = (previousState: "analyzing" | "in_progress", sessionId = "session-1") =>
 	IssueState.Error({
 		previousState,
 		sessionId,
@@ -80,7 +80,7 @@ describe("transition from Pending", () => {
 				IssueAction.Approve({
 					worktreePath: "/wt",
 					worktreeBranch: "fix",
-					fixSessionId: "fs",
+					implementationSessionId: "fs",
 				}),
 			).pipe(Effect.exit);
 
@@ -102,15 +102,15 @@ describe("transition from Pending", () => {
 // ----------------------------------------------------------------------------
 
 describe("transition from Analyzing", () => {
-	it.effect("CompleteAnalysis -> Proposed", () =>
+	it.effect("CompleteAnalysis -> PendingApproval", () =>
 		Effect.gen(function* () {
 			const result = yield* transition(
 				analyzing("session-1"),
 				IssueAction.CompleteAnalysis({ proposal: "Add null check" }),
 			);
 
-			expect(result._tag).toBe("Proposed");
-			if (result._tag === "Proposed") {
+			expect(result._tag).toBe("PendingApproval");
+			if (result._tag === "PendingApproval") {
 				expect(result.sessionId).toBe("session-1");
 				expect(result.proposal).toBe("Add null check");
 			}
@@ -151,7 +151,7 @@ describe("transition from Analyzing", () => {
 				IssueAction.Approve({
 					worktreePath: "/wt",
 					worktreeBranch: "fix",
-					fixSessionId: "fs",
+					implementationSessionId: "fs",
 				}),
 			).pipe(Effect.exit);
 
@@ -161,25 +161,25 @@ describe("transition from Analyzing", () => {
 });
 
 // ----------------------------------------------------------------------------
-// Valid Transitions: Proposed
+// Valid Transitions: PendingApproval
 // ----------------------------------------------------------------------------
 
-describe("transition from Proposed", () => {
-	it.effect("Approve -> Fixing", () =>
+describe("transition from PendingApproval", () => {
+	it.effect("Approve -> InProgress", () =>
 		Effect.gen(function* () {
 			const result = yield* transition(
-				proposed("session-1", "The fix"),
+				pendingApproval("session-1", "The fix"),
 				IssueAction.Approve({
 					worktreePath: "/worktrees/fix-123",
 					worktreeBranch: "fix/issue-123",
-					fixSessionId: "fix-session-1",
+					implementationSessionId: "fix-session-1",
 				}),
 			);
 
-			expect(result._tag).toBe("Fixing");
-			if (result._tag === "Fixing") {
+			expect(result._tag).toBe("InProgress");
+			if (result._tag === "InProgress") {
 				expect(result.analysisSessionId).toBe("session-1");
-				expect(result.fixSessionId).toBe("fix-session-1");
+				expect(result.implementationSessionId).toBe("fix-session-1");
 				expect(result.worktreePath).toBe("/worktrees/fix-123");
 				expect(result.worktreeBranch).toBe("fix/issue-123");
 			}
@@ -188,7 +188,7 @@ describe("transition from Proposed", () => {
 
 	it.effect("Reject -> Pending", () =>
 		Effect.gen(function* () {
-			const result = yield* transition(proposed(), IssueAction.Reject());
+			const result = yield* transition(pendingApproval(), IssueAction.Reject());
 
 			expect(result._tag).toBe("Pending");
 		}),
@@ -197,7 +197,7 @@ describe("transition from Proposed", () => {
 	it.effect("RequestChanges -> Analyzing (same session)", () =>
 		Effect.gen(function* () {
 			const result = yield* transition(
-				proposed("session-1", "Original proposal"),
+				pendingApproval("session-1", "Original proposal"),
 				IssueAction.RequestChanges({ feedback: "Please also handle edge case" }),
 			);
 
@@ -212,7 +212,7 @@ describe("transition from Proposed", () => {
 	it.effect("rejects StartAnalysis", () =>
 		Effect.gen(function* () {
 			const exit = yield* transition(
-				proposed(),
+				pendingApproval(),
 				IssueAction.StartAnalysis({ sessionId: "new" }),
 			).pipe(Effect.exit);
 
@@ -220,9 +220,9 @@ describe("transition from Proposed", () => {
 		}),
 	);
 
-	it.effect("rejects CompleteFix", () =>
+	it.effect("rejects Complete", () =>
 		Effect.gen(function* () {
-			const exit = yield* transition(proposed(), IssueAction.CompleteFix()).pipe(Effect.exit);
+			const exit = yield* transition(pendingApproval(), IssueAction.Complete()).pipe(Effect.exit);
 
 			expect(Exit.isFailure(exit)).toBe(true);
 		}),
@@ -230,25 +230,25 @@ describe("transition from Proposed", () => {
 });
 
 // ----------------------------------------------------------------------------
-// Valid Transitions: Fixing
+// Valid Transitions: InProgress
 // ----------------------------------------------------------------------------
 
-describe("transition from Fixing", () => {
-	it.effect("CompleteFix -> Fixed", () =>
+describe("transition from InProgress", () => {
+	it.effect("Complete -> PendingReview", () =>
 		Effect.gen(function* () {
-			const fixingState = fixing({
+			const inProgressState = inProgress({
 				analysisSessionId: "a-1",
-				fixSessionId: "f-1",
+				implementationSessionId: "f-1",
 				worktreePath: "/wt/123",
 				worktreeBranch: "fix/123",
 			});
 
-			const result = yield* transition(fixingState, IssueAction.CompleteFix());
+			const result = yield* transition(inProgressState, IssueAction.Complete());
 
-			expect(result._tag).toBe("Fixed");
-			if (result._tag === "Fixed") {
+			expect(result._tag).toBe("PendingReview");
+			if (result._tag === "PendingReview") {
 				expect(result.analysisSessionId).toBe("a-1");
-				expect(result.fixSessionId).toBe("f-1");
+				expect(result.implementationSessionId).toBe("f-1");
 				expect(result.worktreePath).toBe("/wt/123");
 				expect(result.worktreeBranch).toBe("fix/123");
 			}
@@ -257,12 +257,15 @@ describe("transition from Fixing", () => {
 
 	it.effect("Fail -> Error", () =>
 		Effect.gen(function* () {
-			const fixingState = fixing({ fixSessionId: "fix-session-1" });
-			const result = yield* transition(fixingState, IssueAction.Fail({ error: "Build failed" }));
+			const inProgressState = inProgress({ implementationSessionId: "fix-session-1" });
+			const result = yield* transition(
+				inProgressState,
+				IssueAction.Fail({ error: "Build failed" }),
+			);
 
 			expect(result._tag).toBe("Error");
 			if (result._tag === "Error") {
-				expect(result.previousState).toBe("fixing");
+				expect(result.previousState).toBe("in_progress");
 				expect(result.sessionId).toBe("fix-session-1");
 				expect(result.error).toBe("Build failed");
 			}
@@ -272,11 +275,11 @@ describe("transition from Fixing", () => {
 	it.effect("rejects Approve", () =>
 		Effect.gen(function* () {
 			const exit = yield* transition(
-				fixing(),
+				inProgress(),
 				IssueAction.Approve({
 					worktreePath: "/wt",
 					worktreeBranch: "fix",
-					fixSessionId: "fs",
+					implementationSessionId: "fs",
 				}),
 			).pipe(Effect.exit);
 
@@ -286,7 +289,7 @@ describe("transition from Fixing", () => {
 
 	it.effect("rejects Cleanup", () =>
 		Effect.gen(function* () {
-			const exit = yield* transition(fixing(), IssueAction.Cleanup()).pipe(Effect.exit);
+			const exit = yield* transition(inProgress(), IssueAction.Cleanup()).pipe(Effect.exit);
 
 			expect(Exit.isFailure(exit)).toBe(true);
 		}),
@@ -294,13 +297,13 @@ describe("transition from Fixing", () => {
 });
 
 // ----------------------------------------------------------------------------
-// Valid Transitions: Fixed
+// Valid Transitions: PendingReview
 // ----------------------------------------------------------------------------
 
-describe("transition from Fixed", () => {
+describe("transition from PendingReview", () => {
 	it.effect("Cleanup -> Pending", () =>
 		Effect.gen(function* () {
-			const result = yield* transition(fixed(), IssueAction.Cleanup());
+			const result = yield* transition(pendingReview(), IssueAction.Cleanup());
 
 			expect(result._tag).toBe("Pending");
 		}),
@@ -308,9 +311,10 @@ describe("transition from Fixed", () => {
 
 	it.effect("rejects StartAnalysis", () =>
 		Effect.gen(function* () {
-			const exit = yield* transition(fixed(), IssueAction.StartAnalysis({ sessionId: "new" })).pipe(
-				Effect.exit,
-			);
+			const exit = yield* transition(
+				pendingReview(),
+				IssueAction.StartAnalysis({ sessionId: "new" }),
+			).pipe(Effect.exit);
 
 			expect(Exit.isFailure(exit)).toBe(true);
 		}),
@@ -319,11 +323,11 @@ describe("transition from Fixed", () => {
 	it.effect("rejects Approve", () =>
 		Effect.gen(function* () {
 			const exit = yield* transition(
-				fixed(),
+				pendingReview(),
 				IssueAction.Approve({
 					worktreePath: "/wt",
 					worktreeBranch: "fix",
-					fixSessionId: "fs",
+					implementationSessionId: "fs",
 				}),
 			).pipe(Effect.exit);
 
@@ -353,7 +357,7 @@ describe("transition from Error", () => {
 
 	it.effect("Reject -> Pending", () =>
 		Effect.gen(function* () {
-			const result = yield* transition(error("fixing"), IssueAction.Reject());
+			const result = yield* transition(error("in_progress"), IssueAction.Reject());
 
 			expect(result._tag).toBe("Pending");
 		}),
@@ -370,9 +374,11 @@ describe("transition from Error", () => {
 		}),
 	);
 
-	it.effect("rejects CompleteFix", () =>
+	it.effect("rejects Complete", () =>
 		Effect.gen(function* () {
-			const exit = yield* transition(error("fixing"), IssueAction.CompleteFix()).pipe(Effect.exit);
+			const exit = yield* transition(error("in_progress"), IssueAction.Complete()).pipe(
+				Effect.exit,
+			);
 
 			expect(Exit.isFailure(exit)).toBe(true);
 		}),
@@ -391,7 +397,7 @@ describe("InvalidTransitionError", () => {
 				IssueAction.Approve({
 					worktreePath: "/wt",
 					worktreeBranch: "fix",
-					fixSessionId: "fs",
+					implementationSessionId: "fs",
 				}),
 			).pipe(Effect.exit);
 
@@ -422,16 +428,16 @@ describe("IssueState", () => {
 		const states: IssueState[] = [
 			IssueState.Pending(),
 			IssueState.Analyzing({ sessionId: "s" }),
-			IssueState.Proposed({ sessionId: "s", proposal: "p" }),
-			IssueState.Fixing({
+			IssueState.PendingApproval({ sessionId: "s", proposal: "p" }),
+			IssueState.InProgress({
 				analysisSessionId: "a",
-				fixSessionId: "f",
+				implementationSessionId: "f",
 				worktreePath: "/p",
 				worktreeBranch: "b",
 			}),
-			IssueState.Fixed({
+			IssueState.PendingReview({
 				analysisSessionId: "a",
-				fixSessionId: "f",
+				implementationSessionId: "f",
 				worktreePath: "/p",
 				worktreeBranch: "b",
 			}),
@@ -445,9 +451,9 @@ describe("IssueState", () => {
 		const tags = states.map((s) => s._tag);
 		expect(tags).toContain("Pending");
 		expect(tags).toContain("Analyzing");
-		expect(tags).toContain("Proposed");
-		expect(tags).toContain("Fixing");
-		expect(tags).toContain("Fixed");
+		expect(tags).toContain("PendingApproval");
+		expect(tags).toContain("InProgress");
+		expect(tags).toContain("PendingReview");
 		expect(tags).toContain("Error");
 	});
 });
@@ -460,11 +466,11 @@ describe("IssueAction", () => {
 			IssueAction.Approve({
 				worktreePath: "/p",
 				worktreeBranch: "b",
-				fixSessionId: "f",
+				implementationSessionId: "f",
 			}),
 			IssueAction.Reject(),
 			IssueAction.RequestChanges({ feedback: "f" }),
-			IssueAction.CompleteFix(),
+			IssueAction.Complete(),
 			IssueAction.Fail({ error: "e" }),
 			IssueAction.Retry({ newSessionId: "s" }),
 			IssueAction.Cleanup(),
@@ -476,7 +482,7 @@ describe("IssueAction", () => {
 		expect(tags).toContain("Approve");
 		expect(tags).toContain("Reject");
 		expect(tags).toContain("RequestChanges");
-		expect(tags).toContain("CompleteFix");
+		expect(tags).toContain("Complete");
 		expect(tags).toContain("Fail");
 		expect(tags).toContain("Retry");
 		expect(tags).toContain("Cleanup");

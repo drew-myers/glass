@@ -115,31 +115,31 @@ export const getSourceType = (source: IssueSource): "sentry" | "github" | "ticke
  * Represents the current state of an issue in the Glass workflow.
  *
  * State machine:
- * - Pending: Issue is new, no analysis started
- * - Analyzing: Agent is analyzing the issue
- * - Proposed: Agent has proposed a fix, awaiting review
- * - Fixing: Fix has been approved, agent is implementing
- * - Fixed: Fix is complete, worktree ready for review
- * - Error: An error occurred during analysis or fixing
+ * - Pending: Issue is new, no work started
+ * - Analyzing: Agent is researching/planning the approach
+ * - PendingApproval: Agent has a plan, awaiting human approval
+ * - InProgress: Work approved, agent is implementing changes
+ * - PendingReview: Implementation done, ready for human review
+ * - Error: An error occurred during analysis or implementation
  */
 export type IssueState = Data.TaggedEnum<{
 	Pending: {};
 	Analyzing: { readonly sessionId: string };
-	Proposed: { readonly sessionId: string; readonly proposal: string };
-	Fixing: {
+	PendingApproval: { readonly sessionId: string; readonly proposal: string };
+	InProgress: {
 		readonly analysisSessionId: string;
-		readonly fixSessionId: string;
+		readonly implementationSessionId: string;
 		readonly worktreePath: string;
 		readonly worktreeBranch: string;
 	};
-	Fixed: {
+	PendingReview: {
 		readonly analysisSessionId: string;
-		readonly fixSessionId: string;
+		readonly implementationSessionId: string;
 		readonly worktreePath: string;
 		readonly worktreeBranch: string;
 	};
 	Error: {
-		readonly previousState: "analyzing" | "fixing";
+		readonly previousState: "analyzing" | "in_progress";
 		readonly sessionId: string;
 		readonly error: string;
 	};
@@ -160,11 +160,11 @@ export type IssueAction = Data.TaggedEnum<{
 	Approve: {
 		readonly worktreePath: string;
 		readonly worktreeBranch: string;
-		readonly fixSessionId: string;
+		readonly implementationSessionId: string;
 	};
 	Reject: {};
 	RequestChanges: { readonly feedback: string };
-	CompleteFix: {};
+	Complete: {};
 	Fail: { readonly error: string };
 	Retry: { readonly newSessionId: string };
 	Cleanup: {};
@@ -231,19 +231,19 @@ export interface Issue {
  * Validates and performs state transitions based on the current state and action.
  *
  * Valid transitions:
- * | From State | Action           | To State                    |
- * |------------|------------------|-----------------------------|
- * | Pending    | StartAnalysis    | Analyzing                   |
- * | Analyzing  | CompleteAnalysis | Proposed                    |
- * | Analyzing  | Fail             | Error                       |
- * | Proposed   | Approve          | Fixing                      |
- * | Proposed   | Reject           | Pending                     |
- * | Proposed   | RequestChanges   | Analyzing (same session)    |
- * | Fixing     | CompleteFix      | Fixed                       |
- * | Fixing     | Fail             | Error                       |
- * | Fixed      | Cleanup          | Pending                     |
- * | Error      | Retry            | Analyzing (new session)     |
- * | Error      | Reject           | Pending                     |
+ * | From State      | Action           | To State                    |
+ * |-----------------|------------------|-----------------------------|
+ * | Pending         | StartAnalysis    | Analyzing                   |
+ * | Analyzing       | CompleteAnalysis | PendingApproval             |
+ * | Analyzing       | Fail             | Error                       |
+ * | PendingApproval | Approve          | InProgress                  |
+ * | PendingApproval | Reject           | Pending                     |
+ * | PendingApproval | RequestChanges   | Analyzing (same session)    |
+ * | InProgress      | Complete         | PendingReview               |
+ * | InProgress      | Fail             | Error                       |
+ * | PendingReview   | Cleanup          | Pending                     |
+ * | Error           | Retry            | Analyzing (new session)     |
+ * | Error           | Reject           | Pending                     |
  *
  * @param state - Current issue state
  * @param action - Action to apply
@@ -256,9 +256,9 @@ export const transition = (
 	Match.value(state).pipe(
 		Match.tag("Pending", () => transitionFromPending(action)),
 		Match.tag("Analyzing", (s) => transitionFromAnalyzing(s, action)),
-		Match.tag("Proposed", (s) => transitionFromProposed(s, action)),
-		Match.tag("Fixing", (s) => transitionFromFixing(s, action)),
-		Match.tag("Fixed", () => transitionFromFixed(action)),
+		Match.tag("PendingApproval", (s) => transitionFromPendingApproval(s, action)),
+		Match.tag("InProgress", (s) => transitionFromInProgress(s, action)),
+		Match.tag("PendingReview", () => transitionFromPendingReview(action)),
 		Match.tag("Error", (s) => transitionFromError(s, action)),
 		Match.exhaustive,
 	);
@@ -283,7 +283,7 @@ const transitionFromAnalyzing = (
 ): Effect.Effect<IssueState, InvalidTransitionError> =>
 	Match.value(action).pipe(
 		Match.tag("CompleteAnalysis", ({ proposal }) =>
-			Effect.succeed(IssueState.Proposed({ sessionId: state.sessionId, proposal })),
+			Effect.succeed(IssueState.PendingApproval({ sessionId: state.sessionId, proposal })),
 		),
 		Match.tag("Fail", ({ error }) =>
 			Effect.succeed(
@@ -297,16 +297,16 @@ const transitionFromAnalyzing = (
 		Match.orElse((a) => invalidTransition("Analyzing", a._tag)),
 	);
 
-const transitionFromProposed = (
-	state: Data.TaggedEnum.Value<IssueState, "Proposed">,
+const transitionFromPendingApproval = (
+	state: Data.TaggedEnum.Value<IssueState, "PendingApproval">,
 	action: IssueAction,
 ): Effect.Effect<IssueState, InvalidTransitionError> =>
 	Match.value(action).pipe(
-		Match.tag("Approve", ({ worktreePath, worktreeBranch, fixSessionId }) =>
+		Match.tag("Approve", ({ worktreePath, worktreeBranch, implementationSessionId }) =>
 			Effect.succeed(
-				IssueState.Fixing({
+				IssueState.InProgress({
 					analysisSessionId: state.sessionId,
-					fixSessionId,
+					implementationSessionId,
 					worktreePath,
 					worktreeBranch,
 				}),
@@ -317,19 +317,19 @@ const transitionFromProposed = (
 			// Stay in Analyzing with same session - agent continues conversation
 			Effect.succeed(IssueState.Analyzing({ sessionId: state.sessionId })),
 		),
-		Match.orElse((a) => invalidTransition("Proposed", a._tag)),
+		Match.orElse((a) => invalidTransition("PendingApproval", a._tag)),
 	);
 
-const transitionFromFixing = (
-	state: Data.TaggedEnum.Value<IssueState, "Fixing">,
+const transitionFromInProgress = (
+	state: Data.TaggedEnum.Value<IssueState, "InProgress">,
 	action: IssueAction,
 ): Effect.Effect<IssueState, InvalidTransitionError> =>
 	Match.value(action).pipe(
-		Match.tag("CompleteFix", () =>
+		Match.tag("Complete", () =>
 			Effect.succeed(
-				IssueState.Fixed({
+				IssueState.PendingReview({
 					analysisSessionId: state.analysisSessionId,
-					fixSessionId: state.fixSessionId,
+					implementationSessionId: state.implementationSessionId,
 					worktreePath: state.worktreePath,
 					worktreeBranch: state.worktreeBranch,
 				}),
@@ -338,21 +338,21 @@ const transitionFromFixing = (
 		Match.tag("Fail", ({ error }) =>
 			Effect.succeed(
 				IssueState.Error({
-					previousState: "fixing",
-					sessionId: state.fixSessionId,
+					previousState: "in_progress",
+					sessionId: state.implementationSessionId,
 					error,
 				}),
 			),
 		),
-		Match.orElse((a) => invalidTransition("Fixing", a._tag)),
+		Match.orElse((a) => invalidTransition("InProgress", a._tag)),
 	);
 
-const transitionFromFixed = (
+const transitionFromPendingReview = (
 	action: IssueAction,
 ): Effect.Effect<IssueState, InvalidTransitionError> =>
 	Match.value(action).pipe(
 		Match.tag("Cleanup", () => Effect.succeed(IssueState.Pending())),
-		Match.orElse((a) => invalidTransition("Fixed", a._tag)),
+		Match.orElse((a) => invalidTransition("PendingReview", a._tag)),
 	);
 
 const transitionFromError = (
