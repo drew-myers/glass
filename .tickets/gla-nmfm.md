@@ -29,3 +29,22 @@ Set up SQLite database with @effect/sql-sqlite-bun and create schema
 - Provides IssueRepository and ConversationRepository as Effect Layers
 - Handles concurrent access safely
 
+
+## Notes
+
+**2026-01-30T19:12:43Z**
+
+## Design Update: IssueSource Abstraction
+
+The schema has changed to support multiple issue sources. Key changes:
+
+1. Issues table now uses:
+   - `id TEXT PRIMARY KEY` - Composite format: `{source_type}:{source_id}`
+   - `source_type TEXT NOT NULL` - One of: 'sentry', 'github', 'ticket'
+   - `source_data JSON NOT NULL` - Source-specific data (replaces sentry_project/sentry_data)
+
+2. New index: `CREATE INDEX idx_issues_source_type ON issues(source_type);`
+
+3. Removed: `sentry_project` and `sentry_data` columns
+
+See DESIGN.md Persistence > Schema for the updated SQL.

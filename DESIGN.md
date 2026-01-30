@@ -1,8 +1,8 @@
-# Glass - Sentry Issue Orchestration TUI
+# Glass - Issue Orchestration TUI
 
 ## Overview
 
-Glass is a terminal user interface (TUI) application that helps software engineers automatically fix Sentry issues by orchestrating OpenCode coding agents. It presents a list of team issues from Sentry, allows drill-down analysis, and coordinates an approval-based workflow where agents propose fixes that humans review before implementation.
+Glass is a terminal user interface (TUI) application that helps software engineers automatically fix issues by orchestrating OpenCode coding agents. It presents a list of issues from various sources (Sentry, GitHub, local tickets), allows drill-down analysis, and coordinates an approval-based workflow where agents propose fixes that humans review before implementation.
 
 ### North Star UX References
 
@@ -30,16 +30,23 @@ Glass is a terminal user interface (TUI) application that helps software enginee
 ### High-Level Data Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│   Sentry    │────▶│    Glass    │────▶│   OpenCode   │
-│    API      │     │    (TUI)    │     │   (Agent)    │
-└─────────────┘     └──────┬──────┘     └──────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │   SQLite    │
-                    │  (State DB) │
-                    └─────────────┘
+┌─────────────┐
+│   Sentry    │──────┐
+│    API      │      │
+└─────────────┘      │     ┌─────────────┐     ┌──────────────┐
+                     ├────▶│    Glass    │────▶│   OpenCode   │
+┌─────────────┐      │     │    (TUI)    │     │   (Agent)    │
+│   GitHub    │──────┤     └──────┬──────┘     └──────────────┘
+│   Issues    │      │            │
+└─────────────┘      │     ┌──────▼──────┐
+                     │     │   SQLite    │
+┌─────────────┐      │     │  (State DB) │
+│   Local     │──────┘     └─────────────┘
+│   Tickets   │
+└─────────────┘
 ```
+
+Glass supports multiple issue sources through a pluggable provider architecture. Each source implements fetching, storage serialization, and UI display logic.
 
 ### OpenCode Server Management
 
@@ -135,6 +142,84 @@ PENDING ──[start analysis]──▶ ANALYZING
 
 ## Domain Model
 
+### Issue Source Abstraction
+
+Glass supports multiple issue sources through a tagged union. Each source provides common fields for list display plus source-specific data for detail views and analysis prompts.
+
+```typescript
+// Common fields all issue sources must provide
+export interface IssueSourceCommon {
+  readonly title: string           // Human-readable title/summary
+  readonly shortId: string         // Display ID (e.g., "PROJ-123", "gh#456")
+  readonly firstSeen: Date         // When first seen/created
+  readonly lastSeen: Date          // When last seen/updated
+  readonly count?: number          // Event/occurrence count (if applicable)
+  readonly userCount?: number      // Affected user count (if applicable)
+}
+
+// Sentry-specific issue data
+export interface SentrySourceData extends IssueSourceCommon {
+  readonly culprit: string
+  readonly metadata: {
+    readonly type?: string
+    readonly value?: string
+    readonly filename?: string
+    readonly function?: string
+  }
+  readonly stacktrace?: Stacktrace
+  readonly breadcrumbs?: Breadcrumb[]
+  readonly environment?: string
+  readonly release?: string
+  readonly tags?: Record<string, string>
+}
+
+// GitHub issue data (future)
+export interface GitHubSourceData extends IssueSourceCommon {
+  readonly owner: string
+  readonly repo: string
+  readonly number: number
+  readonly labels: string[]
+  readonly assignees: string[]
+  readonly body: string
+  readonly url: string
+}
+
+// Local ticket data (future)
+export interface TicketSourceData extends IssueSourceCommon {
+  readonly ticketId: string
+  readonly description: string
+  readonly acceptance?: string
+  readonly design?: string
+  readonly tags: string[]
+  readonly priority: number
+}
+
+// Tagged union of all issue sources
+export type IssueSource = Data.TaggedEnum<{
+  Sentry: { project: string; data: SentrySourceData }
+  GitHub: { data: GitHubSourceData }
+  Ticket: { data: TicketSourceData }
+}>
+
+// Helper to extract common fields from any source
+export const getSourceCommon = (source: IssueSource): IssueSourceCommon =>
+  Match.value(source).pipe(
+    Match.tag("Sentry", ({ data }) => data),
+    Match.tag("GitHub", ({ data }) => data),
+    Match.tag("Ticket", ({ data }) => data),
+    Match.exhaustive,
+  )
+```
+
+### Issue ID Format
+
+Issue IDs use a composite format: `{source_type}:{source_id}`
+
+Examples:
+- `sentry:12345` - Sentry issue
+- `github:owner/repo#123` - GitHub issue
+- `ticket:gla-htpw` - Local ticket
+
 ### Core Types (Effect Tagged Unions)
 
 ```typescript
@@ -175,11 +260,10 @@ export type IssueAction = Data.TaggedEnum<{
   Cleanup: {}
 }>
 
-// Issue Entity
+// Issue Entity (source-agnostic)
 export interface Issue {
-  readonly id: string
-  readonly sentryProject: string
-  readonly sentryData: SentryIssueData
+  readonly id: string              // Composite: "{source_type}:{source_id}"
+  readonly source: IssueSource     // Source-specific data
   readonly state: IssueState
   readonly createdAt: Date
   readonly updatedAt: Date
@@ -310,9 +394,10 @@ CREATE TABLE metadata (
 
 -- Issues table
 CREATE TABLE issues (
-    id TEXT PRIMARY KEY,                    -- Sentry issue ID
-    sentry_project TEXT NOT NULL,
-    sentry_data JSON NOT NULL,              -- Full Sentry issue data
+    id TEXT PRIMARY KEY,                    -- Composite ID: "{source_type}:{source_id}"
+    source_type TEXT NOT NULL               -- 'sentry', 'github', 'ticket'
+        CHECK(source_type IN ('sentry', 'github', 'ticket')),
+    source_data JSON NOT NULL,              -- Source-specific data (SentrySourceData, etc.)
     
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK(status IN ('pending', 'analyzing', 'proposed', 'fixing', 'fixed', 'error')),
@@ -334,6 +419,7 @@ CREATE TABLE issues (
 );
 
 CREATE INDEX idx_issues_status ON issues(status);
+CREATE INDEX idx_issues_source_type ON issues(source_type);
 CREATE INDEX idx_issues_updated ON issues(updated_at DESC);
 
 -- Conversation messages
@@ -381,7 +467,7 @@ END;
 3. Validate worktrees still exist for fixing/fixed issues
 4. Start main OpenCode server for project
 5. Reconnect any active sessions (issues in analyzing/proposed/fixing states)
-6. Fetch fresh issues from Sentry
+6. Fetch fresh issues from enabled sources (Sentry, GitHub, tickets, etc.)
 7. Start TUI
 
 ---
@@ -396,16 +482,43 @@ END;
 ### Schema
 
 ```toml
-[sentry]
+# =============================================================================
+# Issue Sources (at least one required)
+# =============================================================================
+
+# Sentry source configuration
+[sources.sentry]
+enabled = true
 organization = "my-org"
 project = "my-project"
 team = "my-team"
 auth_token = "${SENTRY_AUTH_TOKEN}"  # Supports env var interpolation
 region = "us"  # "us" or "de"
 
+# GitHub source configuration (future)
+# [sources.github]
+# enabled = false
+# owner = "my-org"
+# repo = "my-repo"
+# token = "${GITHUB_TOKEN}"
+# labels = ["bug", "help wanted"]  # Filter by labels
+
+# Local ticket source configuration (future)
+# [sources.ticket]
+# enabled = false
+# directory = ".tickets"  # Relative to project root
+
+# =============================================================================
+# OpenCode Configuration
+# =============================================================================
+
 [opencode]
 analyze_model = "anthropic/claude-sonnet-4-20250514"
 fix_model = "anthropic/claude-sonnet-4-20250514"
+
+# =============================================================================
+# Worktree Configuration
+# =============================================================================
 
 [worktree]
 # Command to create worktree - supports {path} and {branch} placeholders
@@ -413,6 +526,10 @@ create_command = "git worktree add {path} -b {branch}"
 # Relative path from project root to worktree parent directory
 # Can be outside project (e.g., "../my-project-worktrees/")
 parent_directory = "../glass-worktrees"
+
+# =============================================================================
+# Display Configuration
+# =============================================================================
 
 [display]
 page_size = 50
