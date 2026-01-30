@@ -10,33 +10,60 @@
 import { Option, Schema } from "effect";
 
 /**
+ * Encoded schema for Sentry configuration (TOML format).
+ * Supports either auth_token (inline) or auth_token_file (path to file).
+ */
+const SentryConfigEncodedSchema = Schema.Struct({
+	organization: Schema.String,
+	project: Schema.String,
+	team: Schema.String,
+	auth_token: Schema.optional(Schema.String),
+	auth_token_file: Schema.optional(Schema.String),
+	region: Schema.Literal("us", "de"),
+});
+
+/**
+ * Decoded schema for Sentry configuration (TypeScript format).
+ */
+const SentryConfigDecodedSchema = Schema.Struct({
+	organization: Schema.String,
+	project: Schema.String,
+	team: Schema.String,
+	authToken: Schema.Redacted(Schema.String),
+	region: Schema.Literal("us", "de"),
+});
+
+/**
  * Schema for Sentry configuration section.
  * Handles auth_token -> authToken transformation.
+ * Supports either auth_token (inline) or auth_token_file (path to file).
+ *
+ * Note: The actual file reading for auth_token_file happens in the loader,
+ * after environment variable interpolation. This schema expects either
+ * auth_token or auth_token_file to be present, and the loader will
+ * resolve auth_token_file to auth_token before schema validation.
  */
 export const SentryConfigSchema = Schema.transform(
-	Schema.Struct({
-		organization: Schema.String,
-		project: Schema.String,
-		team: Schema.String,
-		auth_token: Schema.String,
-		region: Schema.Literal("us", "de"),
-	}),
-	Schema.Struct({
-		organization: Schema.String,
-		project: Schema.String,
-		team: Schema.String,
-		authToken: Schema.Redacted(Schema.String),
-		region: Schema.Literal("us", "de"),
-	}),
+	SentryConfigEncodedSchema,
+	SentryConfigDecodedSchema,
 	{
 		strict: true,
-		decode: (from) => ({
-			organization: from.organization,
-			project: from.project,
-			team: from.team,
-			authToken: from.auth_token,
-			region: from.region,
-		}),
+		decode: (from) => {
+			// At this point, the loader should have resolved auth_token_file to auth_token
+			const token = from.auth_token;
+			if (!token) {
+				throw new Error(
+					"Sentry auth_token is required. Provide either auth_token or auth_token_file.",
+				);
+			}
+			return {
+				organization: from.organization,
+				project: from.project,
+				team: from.team,
+				authToken: token,
+				region: from.region,
+			};
+		},
 		encode: (to) => ({
 			organization: to.organization,
 			project: to.project,
@@ -48,6 +75,7 @@ export const SentryConfigSchema = Schema.transform(
 );
 
 export type SentryConfig = typeof SentryConfigSchema.Type;
+export type SentryConfigEncoded = typeof SentryConfigEncodedSchema.Type;
 
 /**
  * Schema for OpenCode configuration section.

@@ -49,6 +49,7 @@ export const globalKeybinds: KeybindGroup = [
  */
 export const listScreenKeybinds: KeybindGroup = [
 	{ key: "\u2191\u2193", label: "navigate" }, // ↑↓
+	{ key: "C-d/u", label: "page" },
 	{ key: "Enter", label: "open" },
 	{ key: "r", label: "refresh" },
 ] as const;

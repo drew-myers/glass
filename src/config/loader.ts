@@ -171,6 +171,80 @@ const validateConfig = (data: unknown, path: string): Effect.Effect<GlassConfig,
 	);
 
 /**
+ * Expands a path that may start with ~ to the user's home directory.
+ */
+const expandHomePath = (filePath: string): string => {
+	if (filePath.startsWith("~/")) {
+		const home = process.env.HOME;
+		if (home) {
+			return filePath.replace("~", home);
+		}
+	}
+	return filePath;
+};
+
+/**
+ * Resolves auth_token_file to auth_token for sources that support it.
+ * Reads the token from the file and sets it as auth_token.
+ *
+ * @param data - The parsed TOML data (mutable)
+ * @param configPath - The config file path (for error messages)
+ * @returns Effect that resolves when all token files have been read
+ */
+const resolveTokenFiles = (
+	data: unknown,
+	configPath: string,
+): Effect.Effect<unknown, ConfigError, FileSystem.FileSystem> =>
+	Effect.gen(function* () {
+		const fs = yield* FileSystem.FileSystem;
+
+		// Type guard for accessing nested properties
+		if (typeof data !== "object" || data === null) {
+			return data;
+		}
+
+		const config = data as Record<string, unknown>;
+
+		// Check for sources.sentry.auth_token_file
+		const sources = config.sources as Record<string, unknown> | undefined;
+		if (sources && typeof sources === "object") {
+			const sentry = sources.sentry as Record<string, unknown> | undefined;
+			if (sentry && typeof sentry === "object") {
+				const tokenFile = sentry.auth_token_file as string | undefined;
+				if (tokenFile && !sentry.auth_token) {
+					// Read the token from the file
+					const expandedPath = expandHomePath(tokenFile);
+					const exists = yield* fs.exists(expandedPath).pipe(Effect.orElseSucceed(() => false));
+
+					if (!exists) {
+						return yield* Effect.fail(
+							ConfigError.ConfigReadError({
+								path: configPath,
+								message: `auth_token_file not found: ${tokenFile}`,
+							}),
+						);
+					}
+
+					const token = yield* fs.readFileString(expandedPath).pipe(
+						Effect.map((content) => content.trim()),
+						Effect.mapError((error) =>
+							ConfigError.ConfigReadError({
+								path: configPath,
+								message: `Failed to read auth_token_file (${tokenFile}): ${error.message}`,
+							}),
+						),
+					);
+
+					// Set the token on the sentry config
+					sentry.auth_token = token;
+				}
+			}
+		}
+
+		return data;
+	});
+
+/**
  * Loads and validates a Glass configuration file.
  *
  * This is the main entry point for config loading. It:
@@ -222,8 +296,11 @@ export const loadConfig = (
 		// Parse TOML
 		const data = yield* parseTOML(content, path);
 
+		// Resolve auth_token_file references
+		const resolvedData = yield* resolveTokenFiles(data, path);
+
 		// Validate and return
-		return yield* validateConfig(data, path);
+		return yield* validateConfig(resolvedData, path);
 	});
 
 // ----------------------------------------------------------------------------

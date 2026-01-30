@@ -85,8 +85,9 @@ export const makeRendererLayer = (config: RendererConfig): Layer.Layer<Renderer>
  * Handles proper cleanup of the renderer when the effect completes.
  *
  * @param effect - The effect to run with renderer access
- * @returns An effect with the Renderer requirement eliminated
+ * @returns An effect with the Renderer and Scope requirements eliminated
  */
-export const withRenderer = <A, E>(
-	effect: Effect.Effect<A, E, Renderer>,
-): Effect.Effect<A, E, never> => Effect.scoped(Effect.provide(effect, RendererLive));
+export const withRenderer = <A, E, R>(
+	effect: Effect.Effect<A, E, Renderer | Scope.Scope | R>,
+): Effect.Effect<A, E, R> =>
+	Effect.scoped(Effect.provide(effect, RendererLive)) as Effect.Effect<A, E, R>;

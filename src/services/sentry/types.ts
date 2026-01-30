@@ -213,74 +213,124 @@ export const ProjectRefSchema = Schema.Struct({
 export type ProjectRef = typeof ProjectRefSchema.Type;
 
 /**
- * Issue metadata with error type/value info.
+ * Issue metadata type.
  */
-export const IssueMetadataSchema = Schema.Struct({
-	type: Schema.optionalWith(Schema.String, { default: () => "" }),
-	value: Schema.optionalWith(Schema.String, { default: () => "" }),
-	filename: Schema.optionalWith(Schema.String, { default: () => "" }),
-	function: Schema.optionalWith(Schema.String, { default: () => "" }),
-	title: Schema.optionalWith(Schema.String, { default: () => "" }),
+export interface IssueMetadata {
+	readonly type: string;
+	readonly value: string;
+	readonly filename: string;
+	readonly function: string;
+	readonly title: string;
+}
+
+/**
+ * Helper: Schema for a string field that may be null, undefined, or string.
+ * Decodes to empty string if null/undefined.
+ */
+const NullableString = Schema.transform(Schema.NullishOr(Schema.String), Schema.String, {
+	strict: true,
+	decode: (v) => v ?? "",
+	encode: (v) => v,
 });
 
-export type IssueMetadata = typeof IssueMetadataSchema.Type;
+/**
+ * Helper: Schema for a string field with a custom default.
+ */
+const NullableStringWithDefault = (defaultValue: string) =>
+	Schema.transform(Schema.NullishOr(Schema.String), Schema.String, {
+		strict: true,
+		decode: (v) => v ?? defaultValue,
+		encode: (v) => v,
+	});
+
+/**
+ * Schema for issue metadata.
+ * All fields are optional with defaults since Sentry may return null or omit fields.
+ * Extra fields (sdk, in_app_frame_mix, initial_priority, etc.) are ignored.
+ */
+export const IssueMetadataSchema = Schema.Struct({
+	type: Schema.optionalWith(NullableString, { default: () => "" }),
+	value: Schema.optionalWith(NullableString, { default: () => "" }),
+	filename: Schema.optionalWith(NullableString, { default: () => "" }),
+	function: Schema.optionalWith(NullableString, { default: () => "" }),
+	title: Schema.optionalWith(NullableString, { default: () => "" }),
+	// Ignore extra fields from API
+	in_app_frame_mix: Schema.optional(Schema.Unknown),
+	sdk: Schema.optional(Schema.Unknown),
+	initial_priority: Schema.optional(Schema.Unknown),
+});
 
 /**
  * Issue list item as returned by the Sentry API.
  * This is the shape from GET /organizations/{org}/issues/
+ *
+ * Required fields: id, shortId, title, firstSeen, lastSeen, project
+ * Optional fields have defaults for robustness.
+ * Extra fields from API (stats, lifetime, filtered, etc.) are ignored.
  */
 export const SentryIssueSchema = Schema.Struct({
-	/** Sentry issue ID (numeric string) */
+	// Required fields - must be present
 	id: Schema.String,
-	/** Short display ID (e.g., "PROJ-123") */
 	shortId: Schema.String,
-	/** Issue title/summary */
 	title: Schema.String,
-	/** Culprit (usually file:function) */
-	culprit: Schema.String,
-	/** Permanent link to the issue */
-	permalink: Schema.String,
-	/** Log level (error, warning, info) */
-	level: Schema.String,
-	/** Issue status (unresolved, resolved, ignored) */
-	status: Schema.String,
-	/** Platform (python, javascript, etc.) */
-	platform: Schema.NullOr(Schema.String),
-	/** ISO 8601 timestamp of first occurrence */
 	firstSeen: Schema.String,
-	/** ISO 8601 timestamp of most recent occurrence */
 	lastSeen: Schema.String,
-	/** Event count (Sentry returns this as a string) */
-	count: Schema.String,
-	/** Number of affected users */
-	userCount: Schema.Number,
-	/** Issue metadata */
-	metadata: IssueMetadataSchema,
-	/** Project reference */
 	project: ProjectRefSchema,
-	/** Logger name if set */
-	logger: Schema.NullOr(Schema.String),
-	/** Issue type (error, default, etc.) */
-	type: Schema.String,
-	/** Whether the issue is bookmarked */
-	isBookmarked: Schema.Boolean,
-	/** Whether the issue is public */
-	isPublic: Schema.Boolean,
-	/** Whether user is subscribed to updates */
-	isSubscribed: Schema.Boolean,
-	/** Whether user has seen this issue */
-	hasSeen: Schema.Boolean,
-	/** Number of comments on the issue */
-	numComments: Schema.Number,
-	/** Assignee info if assigned */
-	assignedTo: Schema.NullOr(
-		Schema.Struct({
-			type: Schema.String,
-			id: Schema.String,
-			name: Schema.String,
-			email: Schema.optionalWith(Schema.String, { default: () => "" }),
-		}),
+
+	// Optional string fields (may be null or missing)
+	culprit: Schema.optionalWith(NullableString, { default: () => "" }),
+	permalink: Schema.optionalWith(NullableString, { default: () => "" }),
+	level: Schema.optionalWith(NullableStringWithDefault("error"), { default: () => "error" }),
+	status: Schema.optionalWith(NullableStringWithDefault("unresolved"), {
+		default: () => "unresolved",
+	}),
+	platform: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
+	count: Schema.optionalWith(NullableStringWithDefault("0"), { default: () => "0" }),
+	logger: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
+	type: Schema.optionalWith(NullableStringWithDefault("error"), { default: () => "error" }),
+
+	// Optional number fields
+	userCount: Schema.optionalWith(Schema.Number, { default: () => 0 }),
+	numComments: Schema.optionalWith(Schema.Number, { default: () => 0 }),
+
+	// Optional boolean fields
+	isBookmarked: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+	isPublic: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+	isSubscribed: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+	hasSeen: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+
+	// Complex optional fields
+	metadata: Schema.optionalWith(IssueMetadataSchema, {
+		default: () => ({ type: "", value: "", filename: "", function: "", title: "" }),
+	}),
+	assignedTo: Schema.optionalWith(
+		Schema.NullOr(
+			Schema.Struct({
+				type: Schema.String,
+				id: Schema.String,
+				name: Schema.String,
+				email: Schema.optionalWith(Schema.String, { default: () => "" }),
+			}),
+		),
+		{ default: () => null },
 	),
+
+	// Ignore extra fields from API that we don't use
+	shareId: Schema.optional(Schema.Unknown),
+	statusDetails: Schema.optional(Schema.Unknown),
+	substatus: Schema.optional(Schema.Unknown),
+	annotations: Schema.optional(Schema.Unknown),
+	issueType: Schema.optional(Schema.Unknown),
+	issueCategory: Schema.optional(Schema.Unknown),
+	priority: Schema.optional(Schema.Unknown),
+	priorityLockedAt: Schema.optional(Schema.Unknown),
+	seerFixabilityScore: Schema.optional(Schema.Unknown),
+	seerAutofixLastTriggered: Schema.optional(Schema.Unknown),
+	isUnhandled: Schema.optional(Schema.Unknown),
+	stats: Schema.optional(Schema.Unknown),
+	lifetime: Schema.optional(Schema.Unknown),
+	filtered: Schema.optional(Schema.Unknown),
+	subscriptionDetails: Schema.optional(Schema.Unknown),
 });
 
 export type SentryIssue = typeof SentryIssueSchema.Type;

@@ -489,3 +489,107 @@ describe("ConfigLive", () => {
 		),
 	);
 });
+
+// ----------------------------------------------------------------------------
+// auth_token_file Tests
+// ----------------------------------------------------------------------------
+
+const CONFIG_WITH_TOKEN_FILE = `
+[sources.sentry]
+organization = "my-org"
+project = "my-project"
+team = "my-team"
+auth_token_file = "~/.sentry-token"
+region = "us"
+
+[opencode]
+analyze_model = "anthropic/claude-sonnet-4-20250514"
+fix_model = "anthropic/claude-sonnet-4-20250514"
+
+[worktree]
+create_command = "git worktree add {path} -b {branch}"
+parent_directory = "../glass-worktrees"
+
+[display]
+page_size = 50
+`;
+
+describe("auth_token_file", () => {
+	it.effect("reads token from file when auth_token_file is specified", () =>
+		Effect.gen(function* () {
+			const home = process.env.HOME ?? "/home/user";
+			const tokenPath = `${home}/.sentry-token`;
+
+			const config = yield* loadConfig("/config.toml").pipe(
+				Effect.provide(
+					mockFileSystem({
+						"/config.toml": CONFIG_WITH_TOKEN_FILE,
+						[tokenPath]: "token-from-file\n", // With trailing newline to test trimming
+					}),
+				),
+			);
+
+			const sentry = getSentryConfig(config);
+			expect(Redacted.value(sentry.authToken)).toBe("token-from-file");
+		}),
+	);
+
+	it.effect("fails when auth_token_file does not exist", () =>
+		Effect.gen(function* () {
+			const result = yield* loadConfig("/config.toml").pipe(
+				Effect.provide(
+					mockFileSystem({
+						"/config.toml": CONFIG_WITH_TOKEN_FILE,
+						// Token file is not in the mock filesystem
+					}),
+				),
+				Effect.flip,
+			);
+
+			expect(result._tag).toBe("ConfigReadError");
+			if (result._tag === "ConfigReadError") {
+				expect(result.message).toContain("auth_token_file not found");
+			}
+		}),
+	);
+
+	it.effect("prefers auth_token over auth_token_file when both are specified", () =>
+		Effect.gen(function* () {
+			const configWithBoth = `
+[sources.sentry]
+organization = "my-org"
+project = "my-project"
+team = "my-team"
+auth_token = "inline-token"
+auth_token_file = "~/.sentry-token"
+region = "us"
+
+[opencode]
+analyze_model = "model"
+fix_model = "model"
+
+[worktree]
+create_command = "cmd"
+parent_directory = "dir"
+
+[display]
+page_size = 50
+`;
+			const home = process.env.HOME ?? "/home/user";
+			const tokenPath = `${home}/.sentry-token`;
+
+			const config = yield* loadConfig("/config.toml").pipe(
+				Effect.provide(
+					mockFileSystem({
+						"/config.toml": configWithBoth,
+						[tokenPath]: "file-token",
+					}),
+				),
+			);
+
+			const sentry = getSentryConfig(config);
+			// Should use inline token, not file token
+			expect(Redacted.value(sentry.authToken)).toBe("inline-token");
+		}),
+	);
+});
