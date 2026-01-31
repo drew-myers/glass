@@ -64,7 +64,7 @@ export const listScreenKeybinds: KeybindGroup = [
 export const detailScreenKeybinds: KeybindGroup = [
 	{ key: "Esc", label: "back" },
 	{ key: "Tab", label: "switch pane" },
-	{ key: "\u2190\u2192", label: "pane" }, // ←→
+	{ key: "j/k", label: "scroll" },
 ] as const;
 
 // ----------------------------------------------------------------------------

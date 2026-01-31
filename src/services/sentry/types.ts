@@ -351,6 +351,15 @@ export const EventTagSchema = Schema.Struct({
 export type EventTag = typeof EventTagSchema.Type;
 
 /**
+ * User geo location from an event.
+ */
+export const EventUserGeoSchema = Schema.Struct({
+	country_code: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
+	city: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
+	region: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
+});
+
+/**
  * User context from an event.
  */
 export const EventUserSchema = Schema.Struct({
@@ -359,9 +368,11 @@ export const EventUserSchema = Schema.Struct({
 	username: Schema.NullOr(Schema.String),
 	name: Schema.NullOr(Schema.String),
 	ip_address: Schema.NullOr(Schema.String),
-	data: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.Unknown }), {
-		default: () => ({}),
-	}),
+	geo: Schema.optionalWith(Schema.NullOr(EventUserGeoSchema), { default: () => null }),
+	data: Schema.optionalWith(
+		Schema.NullOr(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+		{ default: () => null },
+	),
 });
 
 export type EventUser = typeof EventUserSchema.Type;

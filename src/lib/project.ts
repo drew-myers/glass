@@ -67,3 +67,41 @@ export const databaseDirectory: Effect.Effect<string, never, ProjectPath> = Effe
 	ProjectPath,
 	getDatabaseDirectory,
 );
+
+/**
+ * Computes the logs directory path for a given project.
+ * Format: ~/.local/share/glass/<project-hash>/logs/
+ *
+ * @param projectPath - Absolute path to the project
+ * @returns Absolute path to the logs directory
+ */
+export const getLogsDirectory = (projectPath: string): string => {
+	return Path.join(getDatabaseDirectory(projectPath), "logs");
+};
+
+/**
+ * Computes the log file path for a given project.
+ * Format: ~/.local/share/glass/<project-hash>/logs/glass.log
+ *
+ * @param projectPath - Absolute path to the project
+ * @returns Absolute path to the log file
+ */
+export const getLogFilePath = (projectPath: string): string => {
+	return Path.join(getLogsDirectory(projectPath), "glass.log");
+};
+
+/**
+ * Effect that retrieves the logs directory from the ProjectPath service.
+ */
+export const logsDirectory: Effect.Effect<string, never, ProjectPath> = Effect.map(
+	ProjectPath,
+	getLogsDirectory,
+);
+
+/**
+ * Effect that retrieves the log file path from the ProjectPath service.
+ */
+export const logFilePath: Effect.Effect<string, never, ProjectPath> = Effect.map(
+	ProjectPath,
+	getLogFilePath,
+);

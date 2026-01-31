@@ -466,6 +466,7 @@ const make = Effect.gen(function* () {
 				// Convert to domain types
 				for (const issue of issues) {
 					const sourceData: SentrySourceData = {
+						sentryId: issue.id,
 						title: issue.title,
 						shortId: issue.shortId,
 						culprit: issue.culprit,
@@ -503,6 +504,7 @@ const make = Effect.gen(function* () {
 			const { data: issue } = yield* request(path, SentryIssueSchema, "issue", issueId);
 
 			const sourceData: SentrySourceData = {
+				sentryId: issue.id,
 				title: issue.title,
 				shortId: issue.shortId,
 				culprit: issue.culprit,

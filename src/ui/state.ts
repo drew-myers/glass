@@ -10,6 +10,15 @@ import { type Accessor, type Setter, createSignal } from "solid-js";
 import type { Issue } from "../domain/issue.js";
 
 // ----------------------------------------------------------------------------
+// Detail Screen Types
+// ----------------------------------------------------------------------------
+
+/**
+ * Which pane is focused on the detail screen.
+ */
+export type FocusedPane = "left" | "agent";
+
+// ----------------------------------------------------------------------------
 // Screen State
 // ----------------------------------------------------------------------------
 
@@ -147,6 +156,35 @@ export interface AppState {
 	 * Signal that the app should quit.
 	 */
 	readonly quit: () => void;
+
+	// ---- Detail screen state ----
+	/** Which pane is focused on the detail screen */
+	readonly focusedPane: Accessor<FocusedPane>;
+	/** Scroll offset for the left pane content */
+	readonly leftPaneScrollOffset: Accessor<number>;
+	/** Whether detail event data is being fetched */
+	readonly isDetailLoading: Accessor<boolean>;
+	/** Setter for detail loading state */
+	readonly setIsDetailLoading: Setter<boolean>;
+
+	// ---- Detail screen actions ----
+	/**
+	 * Switch focus between left and agent panes.
+	 */
+	readonly switchPane: () => void;
+
+	/**
+	 * Scroll the left pane content.
+	 * @param direction - "up" or "down"
+	 * @param amount - Number of lines to scroll (default 1)
+	 * @param maxOffset - Maximum scroll offset (content height - visible height)
+	 */
+	readonly scrollLeftPane: (direction: "up" | "down", amount: number, maxOffset: number) => void;
+
+	/**
+	 * Reset detail screen state (called when navigating to detail).
+	 */
+	readonly resetDetailState: () => void;
 }
 
 /**
@@ -224,6 +262,9 @@ export const createAppState = (): AppState => {
 		const currentIssues = issues();
 		const issue = currentIssues[selectedIndex()];
 		if (issue) {
+			// Reset detail state before navigating
+			setFocusedPane("left");
+			setLeftPaneScrollOffset(0);
 			setScreen(ScreenState.Detail({ issueId: issue.id }));
 		}
 	};
@@ -234,6 +275,31 @@ export const createAppState = (): AppState => {
 
 	const quit = (): void => {
 		setShouldQuit(true);
+	};
+
+	// ---- Detail screen signals ----
+	const [focusedPane, setFocusedPane] = createSignal<FocusedPane>("left");
+	const [leftPaneScrollOffset, setLeftPaneScrollOffset] = createSignal(0);
+	const [isDetailLoading, setIsDetailLoading] = createSignal(false);
+
+	// ---- Detail screen actions ----
+
+	const switchPane = (): void => {
+		setFocusedPane((current) => (current === "left" ? "agent" : "left"));
+	};
+
+	const scrollLeftPane = (direction: "up" | "down", amount: number, maxOffset: number): void => {
+		setLeftPaneScrollOffset((current) => {
+			const delta = direction === "up" ? -amount : amount;
+			const newOffset = current + delta;
+			// Clamp to valid range [0, maxOffset]
+			return Math.max(0, Math.min(newOffset, Math.max(0, maxOffset)));
+		});
+	};
+
+	const resetDetailState = (): void => {
+		setFocusedPane("left");
+		setLeftPaneScrollOffset(0);
 	};
 
 	return {
@@ -260,5 +326,16 @@ export const createAppState = (): AppState => {
 		openSelected,
 		tickSpinner,
 		quit,
+
+		// Detail screen signals
+		focusedPane,
+		leftPaneScrollOffset,
+		isDetailLoading,
+		setIsDetailLoading,
+
+		// Detail screen actions
+		switchPane,
+		scrollLeftPane,
+		resetDetailState,
 	};
 };

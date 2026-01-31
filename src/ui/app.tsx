@@ -6,17 +6,22 @@
  */
 
 import { useKeyboard, useRenderer } from "@opentui/solid";
-import { type JSX, Match, Switch, onCleanup, onMount } from "solid-js";
+import { type JSX, Match, Show, Switch, onCleanup, onMount } from "solid-js";
 import { ActionBar } from "./components/action-bar.js";
 import { StatusBar, type StatusBarProps } from "./components/status-bar.js";
 import {
 	detailScreenKeybinds,
+	errorStateKeybinds,
 	getNavigationDirection,
 	globalKeybinds,
 	listScreenKeybinds,
 	matchesCtrl,
 	matchesKey,
+	pendingApprovalKeybinds,
+	pendingReviewKeybinds,
+	pendingStateKeybinds,
 } from "./keybinds.js";
+import { DetailScreen } from "./screens/detail.js";
 import { IssueList } from "./screens/list.js";
 import { type AppState, ScreenState, createAppState } from "./state.js";
 import { colors, heights } from "./theme.js";
@@ -38,6 +43,8 @@ export interface AppProps {
 	readonly statusBarProps?: StatusBarProps | undefined;
 	/** Callback to trigger refresh */
 	readonly onRefresh?: () => void;
+	/** Callback when user opens issue detail (triggers event data fetch) */
+	readonly onOpenDetail?: (issueId: string) => void;
 }
 
 // ----------------------------------------------------------------------------
@@ -57,9 +64,16 @@ export const App = (props: AppProps): JSX.Element => {
 	const renderer = useRenderer();
 	const state = props.state;
 
-	// Calculate visible count from terminal dimensions
+	// Calculate visible count from terminal dimensions (for list screen)
 	const visibleCount = (): number => {
 		const overhead = heights.statusBar + heights.actionBar + 1;
+		return Math.max(1, renderer.height - overhead);
+	};
+
+	// Calculate visible height for detail screen panes
+	// Accounts for status bar, action bar, detail header, and panel borders
+	const detailVisibleHeight = (): number => {
+		const overhead = heights.statusBar + heights.actionBar + 1 + 2; // +1 header, +2 borders
 		return Math.max(1, renderer.height - overhead);
 	};
 
@@ -108,7 +122,13 @@ export const App = (props: AppProps): JSX.Element => {
 
 			// Open selected issue (Enter)
 			if (matchesKey(event, "return")) {
-				state.openSelected();
+				const issues = state.issues();
+				const issue = issues[state.selectedIndex()];
+				if (issue) {
+					state.openSelected();
+					// Trigger event data fetch
+					props.onOpenDetail?.(issue.id);
+				}
 				return;
 			}
 
@@ -124,11 +144,27 @@ export const App = (props: AppProps): JSX.Element => {
 				return;
 			}
 		} else if (currentScreen._tag === "Detail") {
-			// Back to list (Escape)
-			if (matchesKey(event, "escape")) {
+			// Back to list (Escape or q)
+			if (matchesKey(event, "escape") || matchesKey(event, "q")) {
 				state.navigateTo(ScreenState.List());
 				return;
 			}
+
+			// Switch pane focus (Tab)
+			if (matchesKey(event, "tab")) {
+				state.switchPane();
+				return;
+			}
+
+			// Switch pane focus (h/l or left/right arrows)
+			const direction = getNavigationDirection(event);
+			if (direction === "left" || direction === "right") {
+				state.switchPane();
+				return;
+			}
+
+			// Note: j/k scrolling for left pane is handled directly in DetailScreen
+			// via scrollbox ref for smoother native scroll behavior
 		}
 	});
 
@@ -149,12 +185,38 @@ export const App = (props: AppProps): JSX.Element => {
 		}
 	});
 
-	// Derive current keybinds from screen
+	// Derive current keybinds from screen and issue state
 	const currentKeybinds = () => {
 		const screen = state.screen();
-		return screen._tag === "List"
-			? [...listScreenKeybinds, ...globalKeybinds]
-			: [...detailScreenKeybinds, ...globalKeybinds];
+		if (screen._tag === "List") {
+			return [...listScreenKeybinds, ...globalKeybinds];
+		}
+
+		// Detail screen - add state-specific keybinds
+		const baseKeybinds = [...detailScreenKeybinds];
+
+		// Find the current issue to get its state
+		if (screen._tag === "Detail") {
+			const issue = state.issues().find((i) => i.id === screen.issueId);
+			if (issue) {
+				switch (issue.state._tag) {
+					case "Pending":
+						baseKeybinds.push(...pendingStateKeybinds);
+						break;
+					case "PendingApproval":
+						baseKeybinds.push(...pendingApprovalKeybinds);
+						break;
+					case "PendingReview":
+						baseKeybinds.push(...pendingReviewKeybinds);
+						break;
+					case "Error":
+						baseKeybinds.push(...errorStateKeybinds);
+						break;
+				}
+			}
+		}
+
+		return [...baseKeybinds, ...globalKeybinds];
 	};
 
 	return (
@@ -187,16 +249,33 @@ export const App = (props: AppProps): JSX.Element => {
 						/>
 					</Match>
 					<Match when={state.screen()._tag === "Detail"}>
-						{/* Placeholder for detail screen - will be implemented in a later ticket */}
-						<box
-							width="100%"
-							flexGrow={1}
-							flexDirection="column"
-							justifyContent="center"
-							alignItems="center"
-						>
-							<text fg={colors.fgDim}>Detail view coming soon...</text>
-						</box>
+						{(() => {
+							const screen = state.screen();
+							if (screen._tag !== "Detail") return null;
+							const issue = state.issues().find((i) => i.id === screen.issueId);
+							if (!issue) {
+								return (
+									<box
+										width="100%"
+										flexGrow={1}
+										flexDirection="column"
+										justifyContent="center"
+										alignItems="center"
+									>
+										<text fg={colors.fgDim}>Issue not found</text>
+									</box>
+								);
+							}
+							return (
+								<DetailScreen
+									issue={issue}
+									focusedPane={state.focusedPane()}
+									scrollOffset={state.leftPaneScrollOffset()}
+									visibleHeight={detailVisibleHeight()}
+									isLoading={state.isDetailLoading()}
+								/>
+							);
+						})()}
 					</Match>
 				</Switch>
 			</box>

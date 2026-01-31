@@ -499,6 +499,7 @@ describe("IssueSource", () => {
 	const sentrySource = IssueSource.Sentry({
 		project: "my-project",
 		data: {
+			sentryId: "12345678",
 			title: "TypeError: Cannot read property 'id'",
 			shortId: "PROJ-123",
 			firstSeen: now,

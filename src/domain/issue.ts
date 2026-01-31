@@ -117,6 +117,8 @@ export interface ExceptionValue {
  * Contains all the information needed for analysis and display.
  */
 export interface SentrySourceData extends IssueSourceCommon {
+	/** The actual Sentry issue ID (numeric string, used for API calls) */
+	readonly sentryId: string;
 	/** Culprit (usually file:function where error occurred) */
 	readonly culprit: string;
 	/** Issue metadata with error type/value */

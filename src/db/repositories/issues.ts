@@ -174,7 +174,9 @@ const rowToState = (row: SentryIssueRow): IssueState => {
  */
 const rowToIssue = (row: SentryIssueRow): Issue => {
 	// Build source data with only defined optional fields
+	// The row.id is the Sentry issue ID (we store that as the primary key)
 	const sourceData: SentrySourceData = {
+		sentryId: row.id,
 		title: row.title,
 		shortId: row.short_id,
 		culprit: row.culprit,
@@ -394,11 +396,11 @@ const make = Effect.gen(function* () {
           count = ${issue.data.count ?? null},
           user_count = ${issue.data.userCount ?? null},
           metadata = ${metadataJson},
-          environment = ${issue.data.environment ?? null},
-          release = ${issue.data.release ?? null},
-          tags = ${tagsJson},
-          exceptions = ${exceptionsJson},
-          breadcrumbs = ${breadcrumbsJson}
+          environment = COALESCE(${issue.data.environment ?? null}, sentry_issues.environment),
+          release = COALESCE(${issue.data.release ?? null}, sentry_issues.release),
+          tags = COALESCE(${tagsJson}, sentry_issues.tags),
+          exceptions = COALESCE(${exceptionsJson}, sentry_issues.exceptions),
+          breadcrumbs = COALESCE(${breadcrumbsJson}, sentry_issues.breadcrumbs)
       `;
 
 			// Return the upserted issue

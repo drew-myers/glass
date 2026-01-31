@@ -13,6 +13,7 @@ import { ScreenState, calculateWindowStart, createAppState } from "../../src/ui/
  */
 const makeIssue = (id: string): Issue => {
 	const data: SentrySourceData = {
+		sentryId: `sentry-${id}`,
 		title: `Test Issue ${id}`,
 		shortId: `PROJ-${id}`,
 		culprit: "src/app.ts",
@@ -350,6 +351,140 @@ describe("createAppState", () => {
 			state.quit();
 
 			expect(state.shouldQuit()).toBe(true);
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// Detail Screen State Tests
+	// -------------------------------------------------------------------------
+
+	describe("focusedPane", () => {
+		it("starts with left pane focused", () => {
+			const state = createAppState();
+			expect(state.focusedPane()).toBe("left");
+		});
+	});
+
+	describe("leftPaneScrollOffset", () => {
+		it("starts at 0", () => {
+			const state = createAppState();
+			expect(state.leftPaneScrollOffset()).toBe(0);
+		});
+	});
+
+	describe("switchPane", () => {
+		it("switches from left to agent", () => {
+			const state = createAppState();
+
+			state.switchPane();
+
+			expect(state.focusedPane()).toBe("agent");
+		});
+
+		it("switches from agent to left", () => {
+			const state = createAppState();
+			state.switchPane();
+
+			state.switchPane();
+
+			expect(state.focusedPane()).toBe("left");
+		});
+	});
+
+	describe("scrollLeftPane", () => {
+		it("scrolls down", () => {
+			const state = createAppState();
+
+			state.scrollLeftPane("down", 5, 100);
+
+			expect(state.leftPaneScrollOffset()).toBe(5);
+		});
+
+		it("scrolls up", () => {
+			const state = createAppState();
+			state.scrollLeftPane("down", 10, 100);
+
+			state.scrollLeftPane("up", 3, 100);
+
+			expect(state.leftPaneScrollOffset()).toBe(7);
+		});
+
+		it("clamps at 0 when scrolling up", () => {
+			const state = createAppState();
+
+			state.scrollLeftPane("up", 10, 100);
+
+			expect(state.leftPaneScrollOffset()).toBe(0);
+		});
+
+		it("clamps at maxOffset when scrolling down", () => {
+			const state = createAppState();
+
+			state.scrollLeftPane("down", 150, 100);
+
+			expect(state.leftPaneScrollOffset()).toBe(100);
+		});
+
+		it("handles maxOffset of 0", () => {
+			const state = createAppState();
+
+			state.scrollLeftPane("down", 10, 0);
+
+			expect(state.leftPaneScrollOffset()).toBe(0);
+		});
+	});
+
+	describe("resetDetailState", () => {
+		it("resets focusedPane to left", () => {
+			const state = createAppState();
+			state.switchPane();
+
+			state.resetDetailState();
+
+			expect(state.focusedPane()).toBe("left");
+		});
+
+		it("resets scrollOffset to 0", () => {
+			const state = createAppState();
+			state.scrollLeftPane("down", 50, 100);
+
+			state.resetDetailState();
+
+			expect(state.leftPaneScrollOffset()).toBe(0);
+		});
+	});
+
+	describe("openSelected resets detail state", () => {
+		it("resets detail state when opening an issue", () => {
+			const state = createAppState();
+			state.setIssues([makeIssue("1"), makeIssue("2")]);
+			state.switchPane();
+			state.scrollLeftPane("down", 50, 100);
+
+			state.openSelected();
+
+			expect(state.focusedPane()).toBe("left");
+			expect(state.leftPaneScrollOffset()).toBe(0);
+		});
+	});
+
+	describe("isDetailLoading", () => {
+		it("starts as false", () => {
+			const state = createAppState();
+			expect(state.isDetailLoading()).toBe(false);
+		});
+
+		it("can be set to true", () => {
+			const state = createAppState();
+			state.setIsDetailLoading(true);
+			expect(state.isDetailLoading()).toBe(true);
+		});
+
+		it("can be set back to false", () => {
+			const state = createAppState();
+			state.setIsDetailLoading(true);
+			state.setIsDetailLoading(false);
+			expect(state.isDetailLoading()).toBe(false);
 		});
 	});
 });

@@ -23,6 +23,7 @@ interface SentryIssueInput {
 	id: string;
 	project: string;
 	data: {
+		sentryId: string;
 		title: string;
 		shortId: string;
 		culprit: string;
@@ -46,6 +47,7 @@ const makeSentryIssue = (
 	id,
 	project: "my-project",
 	data: {
+		sentryId: `sentry-${id}`,
 		title: `Test Issue ${id}`,
 		shortId: `PROJ-${id}`,
 		culprit: "src/app.ts",
@@ -96,6 +98,7 @@ describe("SentryIssueRepository", () => {
 				const updated = yield* repo.upsert(
 					makeSentryIssue("456", {
 						data: {
+							sentryId: "sentry-456",
 							title: "Updated Title",
 							shortId: "PROJ-456",
 							culprit: "src/updated.ts",
