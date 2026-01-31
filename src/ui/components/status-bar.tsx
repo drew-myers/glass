@@ -4,8 +4,23 @@
  * Displays the app name and project context at the top of the screen.
  */
 
-import type { JSX } from "solid-js";
+import { type JSX, Show } from "solid-js";
 import { colors, heights } from "../theme.js";
+
+// ----------------------------------------------------------------------------
+// Spinner
+// ----------------------------------------------------------------------------
+
+/** Spinner frames for loading animation */
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+
+/**
+ * Gets the spinner character for a given frame.
+ */
+const getSpinnerChar = (frame: number): string => {
+	const index = frame % SPINNER_FRAMES.length;
+	return SPINNER_FRAMES[index] ?? SPINNER_FRAMES[0];
+};
 
 // ----------------------------------------------------------------------------
 // Status Bar Props
@@ -21,6 +36,10 @@ export interface StatusBarProps {
 	readonly project?: string | undefined;
 	/** Optional team name to display */
 	readonly team?: string | undefined;
+	/** Whether data is currently loading */
+	readonly isLoading?: boolean | undefined;
+	/** Current spinner frame index (0-9) */
+	readonly spinnerFrame?: number | undefined;
 }
 
 // ----------------------------------------------------------------------------
@@ -61,10 +80,15 @@ export const StatusBar = (props: StatusBarProps): JSX.Element => {
 			paddingLeft={1}
 			paddingRight={1}
 		>
-			{/* Left side: App name */}
-			<text fg={colors.accent}>
-				<b>Glass</b>
-			</text>
+			{/* Left side: App name with optional loading spinner */}
+			<box flexDirection="row">
+				<text fg={colors.accent}>
+					<b>Glass</b>
+				</text>
+				<Show when={props.isLoading}>
+					<text fg={colors.fgDim}> {getSpinnerChar(props.spinnerFrame ?? 0)} syncing...</text>
+				</Show>
+			</box>
 			{/* Right side: Project context (if provided) */}
 			<text fg={colors.fgDim}>{contextString()}</text>
 		</box>

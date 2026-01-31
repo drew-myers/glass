@@ -7,6 +7,7 @@
 
 import { FetchHttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { createCliRenderer } from "@opentui/core";
 import { render } from "@opentui/solid";
 import { Effect, Layer } from "effect";
 import { Config, ConfigLive, getSentryConfig, hasSentrySource } from "./config/index.js";
@@ -23,16 +24,27 @@ import { App, type AppState, createAppState } from "./ui/app.js";
 import type { StatusBarProps } from "./ui/components/status-bar.js";
 
 // =============================================================================
-// Refresh Logic
+// Data Loading Effects
 // =============================================================================
 
 /**
- * Creates the refresh effect that:
- * 1. Sets loading state
- * 2. Fetches issues from Sentry
- * 3. Upserts each issue to the database
- * 4. Loads all issues from the database
- * 5. Updates the app state with issues
+ * Loads issues from the local database (fast, no network).
+ * Used for eager display on startup.
+ */
+const makeLoadFromDbEffect = (state: AppState): Effect.Effect<void, never, SentryIssueRepository> =>
+	Effect.gen(function* () {
+		const issueRepo = yield* SentryIssueRepository;
+
+		const issues = yield* issueRepo
+			.listAll()
+			.pipe(Effect.catchAll((): Effect.Effect<readonly Issue[]> => Effect.succeed([])));
+
+		state.setIssues(issues);
+	});
+
+/**
+ * Fetches issues from Sentry and updates the database.
+ * Shows loading state in the status bar while fetching.
  */
 const makeRefreshEffect = (
 	state: AppState,
@@ -41,7 +53,7 @@ const makeRefreshEffect = (
 		const sentry = yield* SentryService;
 		const issueRepo = yield* SentryIssueRepository;
 
-		// Set loading state
+		// Set loading state (shows spinner in status bar)
 		state.setIsLoading(true);
 		state.setError(null);
 
@@ -118,6 +130,11 @@ const program: Effect.Effect<void, never, Config | SentryService | SentryIssueRe
 		// Create app state
 		const appState = createAppState();
 
+		// Eagerly load issues from local database (fast, no network)
+		yield* makeLoadFromDbEffect(appState).pipe(
+			Effect.provideService(SentryIssueRepository, issueRepo),
+		);
+
 		// Refresh function that can be called from the UI
 		const handleRefresh = () => {
 			Effect.runFork(
@@ -128,12 +145,16 @@ const program: Effect.Effect<void, never, Config | SentryService | SentryIssueRe
 			);
 		};
 
-		// Render the app with Solid.js
-		render(() => (
-			<App state={appState} statusBarProps={statusBarProps} onRefresh={handleRefresh} />
-		));
+		// Create renderer explicitly so we can destroy it on quit
+		const renderer = yield* Effect.promise(() => createCliRenderer());
 
-		// Trigger initial refresh
+		// Render the app with Solid.js
+		render(
+			() => <App state={appState} statusBarProps={statusBarProps} onRefresh={handleRefresh} />,
+			renderer,
+		);
+
+		// Trigger background refresh from Sentry
 		handleRefresh();
 
 		// Wait for quit signal
@@ -147,6 +168,9 @@ const program: Effect.Effect<void, never, Config | SentryService | SentryIssueRe
 
 			return Effect.sync(() => clearInterval(check));
 		});
+
+		// Destroy the renderer to properly exit
+		renderer.destroy();
 	});
 
 // =============================================================================

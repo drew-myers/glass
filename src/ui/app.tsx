@@ -124,8 +124,8 @@ export const App = (props: AppProps): JSX.Element => {
 				return;
 			}
 		} else if (currentScreen._tag === "Detail") {
-			// Back to list (q)
-			if (matchesKey(event, "q")) {
+			// Back to list (Escape)
+			if (matchesKey(event, "escape")) {
 				state.navigateTo(ScreenState.List());
 				return;
 			}
@@ -170,6 +170,8 @@ export const App = (props: AppProps): JSX.Element => {
 				organization={props.statusBarProps?.organization}
 				project={props.statusBarProps?.project}
 				team={props.statusBarProps?.team}
+				isLoading={state.isLoading()}
+				spinnerFrame={state.spinnerFrame()}
 			/>
 
 			{/* Main content area (flex-grow to fill space) */}
@@ -181,8 +183,6 @@ export const App = (props: AppProps): JSX.Element => {
 							selectedIndex={state.selectedIndex()}
 							windowStart={state.windowStart()}
 							visibleCount={visibleCount()}
-							isLoading={state.isLoading()}
-							spinnerFrame={state.spinnerFrame()}
 							error={state.error()}
 						/>
 					</Match>

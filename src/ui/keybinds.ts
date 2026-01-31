@@ -62,7 +62,7 @@ export const listScreenKeybinds: KeybindGroup = [
  * Keybinds available on the issue detail screen.
  */
 export const detailScreenKeybinds: KeybindGroup = [
-	{ key: "q", label: "back" },
+	{ key: "Esc", label: "back" },
 	{ key: "Tab", label: "switch pane" },
 	{ key: "\u2190\u2192", label: "pane" }, // ←→
 ] as const;

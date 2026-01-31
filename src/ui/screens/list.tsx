@@ -6,7 +6,7 @@
  * approach for handling lists longer than the visible area.
  */
 
-import { type Accessor, For, type JSX, Match, Show, Switch } from "solid-js";
+import { type Accessor, For, type JSX, Show } from "solid-js";
 import type { Issue } from "../../domain/issue.js";
 import { getSourceCommon } from "../../domain/issue.js";
 import { formatRelativeTime } from "../../lib/time.js";
@@ -26,9 +26,6 @@ const COLUMN_WIDTHS = {
 	lastSeen: 10,
 } as const;
 
-/** Spinner frames for loading animation */
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-
 // =============================================================================
 // Props
 // =============================================================================
@@ -45,10 +42,6 @@ export interface IssueListProps {
 	readonly windowStart: number;
 	/** Number of issues visible in the window */
 	readonly visibleCount: number;
-	/** Whether data is currently loading */
-	readonly isLoading: boolean;
-	/** Current spinner frame index (0-9) */
-	readonly spinnerFrame: number;
 	/** Error message to display, if any */
 	readonly error: string | null;
 }
@@ -76,14 +69,6 @@ const formatCount = (count: number | undefined): string => {
 		return `${(count / 1000).toFixed(1)}K`;
 	}
 	return String(count);
-};
-
-/**
- * Gets the spinner character for a given frame.
- */
-const getSpinnerChar = (frame: number): string => {
-	const index = frame % SPINNER_FRAMES.length;
-	return SPINNER_FRAMES[index] ?? SPINNER_FRAMES[0];
 };
 
 // =============================================================================
@@ -190,18 +175,6 @@ const EmptyState = (): JSX.Element => {
 };
 
 /**
- * Renders a loading indicator with spinner.
- */
-const LoadingIndicator = (props: { frame: number }): JSX.Element => {
-	return (
-		<box width="100%" flexDirection="row" justifyContent="center" paddingTop={1}>
-			<text fg={colors.accent}>{getSpinnerChar(props.frame)}</text>
-			<text fg={colors.fgDim}> Loading issues...</text>
-		</box>
-	);
-};
-
-/**
  * Renders an error banner.
  */
 const ErrorBanner = (props: { message: string }): JSX.Element => {
@@ -219,18 +192,6 @@ const ErrorBanner = (props: { message: string }): JSX.Element => {
 	);
 };
 
-/**
- * Renders a refreshing indicator at the bottom of the list.
- */
-const RefreshingIndicator = (props: { frame: number }): JSX.Element => {
-	return (
-		<box width="100%" flexDirection="row" paddingLeft={1}>
-			<text fg={colors.accent}>{getSpinnerChar(props.frame)}</text>
-			<text fg={colors.fgMuted}> Refreshing...</text>
-		</box>
-	);
-};
-
 // =============================================================================
 // Main Component
 // =============================================================================
@@ -241,7 +202,6 @@ const RefreshingIndicator = (props: { frame: number }): JSX.Element => {
  * Displays a windowed view of issues with:
  * - Column headers
  * - Selectable issue rows with status indicators
- * - Loading spinner when fetching
  * - Error banner when fetch fails
  * - Empty state when no issues
  */
@@ -258,36 +218,18 @@ export const IssueList = (props: IssueListProps): JSX.Element => {
 			</Show>
 
 			{/* Main content area */}
-			<Switch>
-				{/* Loading state (no existing issues) */}
-				<Match when={props.isLoading && props.issues.length === 0}>
-					<LoadingIndicator frame={props.spinnerFrame} />
-				</Match>
-
-				{/* Empty state */}
-				<Match when={props.issues.length === 0}>
-					<EmptyState />
-				</Match>
-
-				{/* Issue list */}
-				<Match when={props.issues.length > 0}>
-					<box width="100%" flexGrow={1} flexDirection="column">
-						<ListHeader />
-						<For each={visibleIssues()}>
-							{(issue, i) => (
-								<IssueRow
-									issue={issue}
-									isSelected={props.windowStart + i() === props.selectedIndex}
-								/>
-							)}
-						</For>
-					</box>
-				</Match>
-			</Switch>
-
-			{/* Loading indicator at bottom when refreshing existing list */}
-			<Show when={props.isLoading && props.issues.length > 0}>
-				<RefreshingIndicator frame={props.spinnerFrame} />
+			<Show when={props.issues.length > 0} fallback={<EmptyState />}>
+				<box width="100%" flexGrow={1} flexDirection="column">
+					<ListHeader />
+					<For each={visibleIssues()}>
+						{(issue, i) => (
+							<IssueRow
+								issue={issue}
+								isSelected={props.windowStart + i() === props.selectedIndex}
+							/>
+						)}
+					</For>
+				</box>
 			</Show>
 		</box>
 	);
