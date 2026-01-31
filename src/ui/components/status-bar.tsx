@@ -36,8 +36,10 @@ export interface StatusBarProps {
 	readonly project?: string | undefined;
 	/** Optional team name to display */
 	readonly team?: string | undefined;
-	/** Whether data is currently loading */
+	/** Whether data is currently loading (sync) */
 	readonly isLoading?: boolean | undefined;
+	/** Whether detail event data is loading */
+	readonly detailLoading?: boolean | undefined;
 	/** Current spinner frame index (0-9) */
 	readonly spinnerFrame?: number | undefined;
 }
@@ -87,6 +89,9 @@ export const StatusBar = (props: StatusBarProps): JSX.Element => {
 				</text>
 				<Show when={props.isLoading}>
 					<text fg={colors.fgDim}> {getSpinnerChar(props.spinnerFrame ?? 0)} syncing...</text>
+				</Show>
+				<Show when={!props.isLoading && props.detailLoading}>
+					<text fg={colors.fgDim}> {getSpinnerChar(props.spinnerFrame ?? 0)} loading...</text>
 				</Show>
 			</box>
 			{/* Right side: Project context (if provided) */}

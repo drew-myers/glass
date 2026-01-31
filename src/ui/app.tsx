@@ -64,12 +64,6 @@ export const App = (props: AppProps): JSX.Element => {
 	const renderer = useRenderer();
 	const state = props.state;
 
-	// Calculate visible count from terminal dimensions (for list screen)
-	const visibleCount = (): number => {
-		const overhead = heights.statusBar + heights.actionBar + 1;
-		return Math.max(1, renderer.height - overhead);
-	};
-
 	// Calculate visible height for detail screen panes
 	// Accounts for status bar, action bar, detail header, and panel borders
 	const detailVisibleHeight = (): number => {
@@ -92,31 +86,31 @@ export const App = (props: AppProps): JSX.Element => {
 			// Navigation (j/k or arrow keys)
 			const direction = getNavigationDirection(event);
 			if (direction === "up" || direction === "down") {
-				state.moveSelection(direction, visibleCount());
+				state.moveSelection(direction);
 				return;
 			}
 
 			// Jump to top (g)
 			if (matchesKey(event, "g") && !event.shift) {
-				state.jumpSelection("top", visibleCount());
+				state.jumpSelection("top");
 				return;
 			}
 
 			// Jump to bottom (G / shift+g)
 			if (matchesKey(event, "g") && event.shift) {
-				state.jumpSelection("bottom", visibleCount());
+				state.jumpSelection("bottom");
 				return;
 			}
 
-			// Page down (Ctrl+D)
+			// Page down (Ctrl+D) - move by 10 items
 			if (matchesCtrl(event, "d")) {
-				state.pageMove("down", visibleCount());
+				state.pageMove("down", 10);
 				return;
 			}
 
-			// Page up (Ctrl+U)
+			// Page up (Ctrl+U) - move by 10 items
 			if (matchesCtrl(event, "u")) {
-				state.pageMove("up", visibleCount());
+				state.pageMove("up", 10);
 				return;
 			}
 
@@ -233,6 +227,7 @@ export const App = (props: AppProps): JSX.Element => {
 				project={props.statusBarProps?.project}
 				team={props.statusBarProps?.team}
 				isLoading={state.isLoading()}
+				detailLoading={state.isDetailLoading()}
 				spinnerFrame={state.spinnerFrame()}
 			/>
 
@@ -243,8 +238,6 @@ export const App = (props: AppProps): JSX.Element => {
 						<IssueList
 							issues={state.issues()}
 							selectedIndex={state.selectedIndex()}
-							windowStart={state.windowStart()}
-							visibleCount={visibleCount()}
 							error={state.error()}
 						/>
 					</Match>
@@ -272,7 +265,6 @@ export const App = (props: AppProps): JSX.Element => {
 									focusedPane={state.focusedPane()}
 									scrollOffset={state.leftPaneScrollOffset()}
 									visibleHeight={detailVisibleHeight()}
-									isLoading={state.isDetailLoading()}
 								/>
 							);
 						})()}

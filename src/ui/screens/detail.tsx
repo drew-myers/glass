@@ -11,7 +11,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import { Match } from "effect";
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "solid-js";
 import type { Issue, SentrySourceData } from "../../domain/issue.js";
 import { getSourceCommon } from "../../domain/issue.js";
 import { GlassSection } from "../components/glass-section.js";
@@ -36,8 +36,6 @@ export interface DetailScreenProps {
 	readonly scrollOffset: number;
 	/** Height available for scrollable content */
 	readonly visibleHeight: number;
-	/** Whether event data is being fetched */
-	readonly isLoading?: boolean;
 }
 
 // =============================================================================
@@ -113,7 +111,6 @@ const LeftPane = (props: {
 	issue: Issue;
 	isFocused: boolean;
 	scrollOffset: number;
-	isLoading: boolean | undefined;
 	scrollRef: (ref: ScrollBoxRenderable) => void;
 }): JSX.Element => {
 	const borderColor = () => (props.isFocused ? colors.borderFocus : colors.border);
@@ -130,9 +127,6 @@ const LeftPane = (props: {
 			<scrollbox ref={props.scrollRef} flexGrow={1}>
 				<box flexDirection="column" flexShrink={0}>
 					<GlassSection issue={props.issue} />
-					<Show when={props.isLoading}>
-						<text fg={colors.fgDim}>Loading event details...</text>
-					</Show>
 					<SourceContent issue={props.issue} />
 				</box>
 			</scrollbox>
@@ -241,7 +235,6 @@ export const DetailScreen = (props: DetailScreenProps): JSX.Element => {
 					issue={props.issue}
 					isFocused={props.focusedPane === "left"}
 					scrollOffset={props.scrollOffset}
-					isLoading={props.isLoading}
 					scrollRef={(ref) => {
 						leftScrollRef = ref;
 					}}
