@@ -4,8 +4,7 @@
  * Displays context-sensitive keybind hints at the bottom of the screen.
  */
 
-import { Box, Text, fg, t } from "@opentui/core";
-import type { VNode } from "@opentui/core";
+import { For, type JSX } from "solid-js";
 import type { KeybindGroup } from "../keybinds.js";
 import { colors, heights, textStyles } from "../theme.js";
 
@@ -31,32 +30,34 @@ export interface ActionBarProps {
  * Shows available keybinds with their labels.
  *
  * @param props - Action bar configuration
- * @returns VNode for the action bar
+ * @returns JSX element for the action bar
  */
-export function ActionBar(props: ActionBarProps): VNode {
-	const { keybinds } = props;
-
+export const ActionBar = (props: ActionBarProps): JSX.Element => {
 	// Filter out disabled keybinds
-	const activeKeybinds = keybinds.filter((kb) => kb.enabled !== false);
+	const activeKeybinds = () => props.keybinds.filter((kb) => kb.enabled !== false);
 
-	return Box(
-		{
-			width: "100%",
-			height: heights.actionBar,
-			backgroundColor: colors.bgPanel,
-			flexDirection: "row",
-			alignItems: "center",
-			paddingLeft: 1,
-			paddingRight: 1,
-			gap: 2,
-		},
-		...activeKeybinds.map((kb) =>
-			Text({
-				content: t`${fg(textStyles.keybind.fg)(`[${kb.key}]`)} ${fg(textStyles.keybindLabel.fg)(kb.label)}`,
-			}),
-		),
+	return (
+		<box
+			width="100%"
+			height={heights.actionBar}
+			backgroundColor={colors.bgPanel}
+			flexDirection="row"
+			alignItems="center"
+			paddingLeft={1}
+			paddingRight={1}
+			gap={2}
+		>
+			<For each={activeKeybinds()}>
+				{(kb) => (
+					<box flexDirection="row">
+						<text fg={textStyles.keybind.fg}>[{kb.key}]</text>
+						<text fg={textStyles.keybindLabel.fg}> {kb.label}</text>
+					</box>
+				)}
+			</For>
+		</box>
 	);
-}
+};
 
 // ----------------------------------------------------------------------------
 // Pre-built Action Bars
@@ -66,13 +67,15 @@ export function ActionBar(props: ActionBarProps): VNode {
  * Creates a simple action bar with quit keybind.
  * Used as the default/minimal action bar.
  *
- * @returns VNode for a minimal action bar
+ * @returns JSX element for a minimal action bar
  */
-export function MinimalActionBar(): VNode {
-	return ActionBar({
-		keybinds: [
-			{ key: "q", label: "quit" },
-			{ key: "?", label: "help" },
-		],
-	});
-}
+export const MinimalActionBar = (): JSX.Element => {
+	return (
+		<ActionBar
+			keybinds={[
+				{ key: "q", label: "quit" },
+				{ key: "?", label: "help" },
+			]}
+		/>
+	);
+};

@@ -1,6 +1,6 @@
 ---
 id: gla-m1ii
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-30T22:15:37Z
@@ -45,3 +45,17 @@ Use OpenTUI's Solid.js bindings which provide proper reactive updates:
 - Spinner animation is smooth
 - All existing functionality preserved
 
+## Notes
+
+**Completed 2026-01-30**
+
+Migrated entire UI layer from imperative `@opentui/core` to reactive `@opentui/solid`. Key changes:
+
+- Added `solid-js` and `@opentui/solid` dependencies
+- Created `src/ui/state.ts` with Solid signals for fine-grained reactivity
+- Converted all components to .tsx: `app.tsx`, `list.tsx`, `status-bar.tsx`, `action-bar.tsx`, `main.tsx`
+- Removed `src/lib/effect-opentui.ts` (no longer needed - Solid's render() manages lifecycle)
+- Updated `tsconfig.json` for JSX and `bunfig.toml` for Bun preload
+- All 260 tests pass, app runs smoothly with no flicker
+
+Deferred: Snapshot tests for components (requires vitest preload setup for Solid).

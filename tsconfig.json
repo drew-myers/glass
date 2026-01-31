@@ -14,7 +14,9 @@
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"declaration": true,
-		"declarationMap": true
+		"declarationMap": true,
+		"jsx": "preserve",
+		"jsxImportSource": "@opentui/solid"
 	},
 	"include": ["src/**/*", "test/**/*"]
 }

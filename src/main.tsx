@@ -2,16 +2,16 @@
  * @fileoverview Glass TUI application entry point.
  *
  * Initializes the Effect runtime, loads configuration, sets up services,
- * and launches the TUI application with issue list refresh capability.
+ * and launches the TUI application with Solid.js reactive rendering.
  */
 
 import { FetchHttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Effect, Layer, Ref, type Scope } from "effect";
+import { render } from "@opentui/solid";
+import { Effect, Layer } from "effect";
 import { Config, ConfigLive, getSentryConfig, hasSentrySource } from "./config/index.js";
 import { DatabaseLive, SentryIssueRepository } from "./db/index.js";
 import type { Issue, IssueSource } from "./domain/issue.js";
-import { Renderer, withRenderer } from "./lib/effect-opentui.js";
 import { ProjectPath } from "./lib/project.js";
 import {
 	type SentryError,
@@ -19,14 +19,7 @@ import {
 	SentryServiceLive,
 	getSentryErrorMessage,
 } from "./services/sentry/index.js";
-import {
-	AppAction,
-	type AppContext,
-	type AppState,
-	createApp,
-	dispatch,
-	runAppLoop,
-} from "./ui/app.js";
+import { App, type AppState, createAppState } from "./ui/app.js";
 import type { StatusBarProps } from "./ui/components/status-bar.js";
 
 // =============================================================================
@@ -42,17 +35,15 @@ import type { StatusBarProps } from "./ui/components/status-bar.js";
  * 5. Updates the app state with issues
  */
 const makeRefreshEffect = (
-	stateRef: Ref.Ref<AppState>,
-	statusBarProps?: StatusBarProps,
-): Effect.Effect<void, never, Renderer | SentryService | SentryIssueRepository> =>
+	state: AppState,
+): Effect.Effect<void, never, SentryService | SentryIssueRepository> =>
 	Effect.gen(function* () {
-		const renderer = yield* Renderer;
 		const sentry = yield* SentryService;
 		const issueRepo = yield* SentryIssueRepository;
 
 		// Set loading state
-		yield* dispatch(stateRef, renderer, AppAction.SetLoading({ isLoading: true }), statusBarProps);
-		yield* dispatch(stateRef, renderer, AppAction.SetError({ error: null }), statusBarProps);
+		state.setIsLoading(true);
+		state.setError(null);
 
 		// Fetch issues from Sentry
 		const sourcesResult = yield* sentry.listIssues().pipe(
@@ -68,12 +59,7 @@ const makeRefreshEffect = (
 
 		// If there was an error, show it but continue to load from DB
 		if (!sourcesResult.success) {
-			yield* dispatch(
-				stateRef,
-				renderer,
-				AppAction.SetError({ error: sourcesResult.error }),
-				statusBarProps,
-			);
+			state.setError(sourcesResult.error);
 		}
 
 		// Upsert fetched issues to database
@@ -97,8 +83,8 @@ const makeRefreshEffect = (
 			.pipe(Effect.catchAll((): Effect.Effect<readonly Issue[]> => Effect.succeed([])));
 
 		// Update app state with issues
-		yield* dispatch(stateRef, renderer, AppAction.SetIssues({ issues }), statusBarProps);
-		yield* dispatch(stateRef, renderer, AppAction.SetLoading({ isLoading: false }), statusBarProps);
+		state.setIssues(issues);
+		state.setIsLoading(false);
 	});
 
 // =============================================================================
@@ -108,79 +94,60 @@ const makeRefreshEffect = (
 /**
  * The main Glass TUI program.
  *
- * Sets up all services and runs the application loop until quit.
+ * Sets up all services and runs the application.
  */
-const program: Effect.Effect<
-	void,
-	never,
-	Renderer | Scope.Scope | Config | SentryService | SentryIssueRepository
-> = Effect.gen(function* () {
-	// Load configuration
-	const config = yield* Config;
-	const renderer = yield* Renderer;
-	const sentry = yield* SentryService;
-	const issueRepo = yield* SentryIssueRepository;
+const program: Effect.Effect<void, never, Config | SentryService | SentryIssueRepository> =
+	Effect.gen(function* () {
+		// Load configuration
+		const config = yield* Config;
+		const sentry = yield* SentryService;
+		const issueRepo = yield* SentryIssueRepository;
 
-	// Determine status bar props from config
-	const statusBarProps: StatusBarProps | undefined = hasSentrySource(config)
-		? (() => {
-				const sentryConfig = getSentryConfig(config);
-				return {
-					organization: sentryConfig.organization,
-					project: sentryConfig.project,
-					team: sentryConfig.team,
-				};
-			})()
-		: undefined;
+		// Determine status bar props from config
+		const statusBarProps: StatusBarProps | undefined = hasSentrySource(config)
+			? (() => {
+					const sentryConfig = getSentryConfig(config);
+					return {
+						organization: sentryConfig.organization,
+						project: sentryConfig.project,
+						team: sentryConfig.team,
+					};
+				})()
+			: undefined;
 
-	// Create app context - the refresh callback will use the captured services
-	const context: AppContext = {
-		onRefresh: () => Effect.void, // Placeholder, we'll run refresh directly
-		statusBarProps,
-	};
+		// Create app state
+		const appState = createAppState();
 
-	// Create the app
-	const stateRef = yield* createApp(context);
+		// Refresh function that can be called from the UI
+		const handleRefresh = () => {
+			Effect.runFork(
+				makeRefreshEffect(appState).pipe(
+					Effect.provideService(SentryService, sentry),
+					Effect.provideService(SentryIssueRepository, issueRepo),
+				),
+			);
+		};
 
-	// Trigger initial refresh using the captured services
-	yield* makeRefreshEffect(stateRef, statusBarProps).pipe(
-		Effect.provideService(Renderer, renderer),
-		Effect.provideService(SentryService, sentry),
-		Effect.provideService(SentryIssueRepository, issueRepo),
-	);
+		// Render the app with Solid.js
+		render(() => (
+			<App state={appState} statusBarProps={statusBarProps} onRefresh={handleRefresh} />
+		));
 
-	// Create a refresh function that can be called from keybind handler
-	const runRefresh = () => {
-		Effect.runFork(
-			makeRefreshEffect(stateRef, statusBarProps).pipe(
-				Effect.provideService(Renderer, renderer),
-				Effect.provideService(SentryService, sentry),
-				Effect.provideService(SentryIssueRepository, issueRepo),
-			),
-		);
-	};
+		// Trigger initial refresh
+		handleRefresh();
 
-	// Listen for the 'r' key to trigger refresh
-	const refreshHandler = (event: import("@opentui/core").KeyEvent) => {
-		// Get current state to check if we're on list screen
-		const state = Effect.runSync(Ref.get(stateRef));
-		if (state.screen._tag === "List" && event.name === "r") {
-			runRefresh();
-		}
-	};
+		// Wait for quit signal
+		yield* Effect.async<void>((resume) => {
+			const check = setInterval(() => {
+				if (appState.shouldQuit()) {
+					clearInterval(check);
+					resume(Effect.void);
+				}
+			}, 50);
 
-	renderer.keyInput.on("keypress", refreshHandler);
-
-	// Cleanup on exit
-	yield* Effect.addFinalizer(() =>
-		Effect.sync(() => {
-			renderer.keyInput.off("keypress", refreshHandler);
-		}),
-	);
-
-	// Run until quit
-	yield* runAppLoop(stateRef, statusBarProps);
-});
+			return Effect.sync(() => clearInterval(check));
+		});
+	});
 
 // =============================================================================
 // Layer Setup
@@ -231,7 +198,7 @@ const createAppLayer = () => {
 /**
  * Run the main program with all layers.
  */
-const main = withRenderer(program).pipe(Effect.provide(createAppLayer()));
+const main = program.pipe(Effect.provide(createAppLayer()));
 
 // Handle configuration errors gracefully
 const mainWithErrorHandling = main.pipe(

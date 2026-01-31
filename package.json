@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
-		"dev": "bun run src/main.ts",
+		"dev": "bun run src/main.tsx",
 		"typecheck": "tsc --noEmit",
 		"test": "bun run --bun vitest",
 		"lint": "biome lint .",
@@ -18,7 +18,9 @@
 		"@iarna/toml": "^3.0",
 		"@opencode-ai/sdk": "latest",
 		"@opentui/core": "^0.1",
-		"effect": "^3.19"
+		"@opentui/solid": "^0.1.75",
+		"effect": "^3.19",
+		"solid-js": "^1.9.11"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9",
