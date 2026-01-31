@@ -2,11 +2,12 @@
  * @fileoverview Issue list screen component.
  *
  * Displays a scrollable list of issues with status indicators, event counts,
- * and relative timestamps. Supports keyboard navigation with a sliding window
- * approach for handling lists longer than the visible area.
+ * and relative timestamps. Uses scrollbox for native scrolling with keyboard
+ * navigation to move selection.
  */
 
-import { type Accessor, For, type JSX, Show } from "solid-js";
+import type { ScrollBoxRenderable } from "@opentui/core";
+import { type Accessor, For, type JSX, Show, createEffect } from "solid-js";
 import type { Issue } from "../../domain/issue.js";
 import { getSourceCommon } from "../../domain/issue.js";
 import { formatRelativeTime } from "../../lib/time.js";
@@ -38,10 +39,6 @@ export interface IssueListProps {
 	readonly issues: readonly Issue[];
 	/** Currently selected issue index */
 	readonly selectedIndex: number;
-	/** First visible issue index (for windowing) */
-	readonly windowStart: number;
-	/** Number of issues visible in the window */
-	readonly visibleCount: number;
 	/** Error message to display, if any */
 	readonly error: string | null;
 }
@@ -120,7 +117,9 @@ const IssueRow = (props: IssueRowProps): JSX.Element => {
 						{statusIcon()}
 					</text>
 					<box flexGrow={1} paddingLeft={1}>
-						<text fg={colors.fgDim}>{common().title}</text>
+						<text fg={colors.fgDim} wrapMode="none">
+							{common().title}
+						</text>
 					</box>
 					<text width={COLUMN_WIDTHS.events} fg={colors.fgDim}>
 						{formatCount(common().count).padStart(COLUMN_WIDTHS.events - 1)}
@@ -143,7 +142,9 @@ const IssueRow = (props: IssueRowProps): JSX.Element => {
 					{statusIcon()}
 				</text>
 				<box flexGrow={1} paddingLeft={1}>
-					<text fg={colors.fg}>{common().title}</text>
+					<text fg={colors.fg} wrapMode="none">
+						{common().title}
+					</text>
 				</box>
 				<text width={COLUMN_WIDTHS.events} fg={colors.fgDim}>
 					{formatCount(common().count).padStart(COLUMN_WIDTHS.events - 1)}
@@ -199,16 +200,28 @@ const ErrorBanner = (props: { message: string }): JSX.Element => {
 /**
  * Main issue list component.
  *
- * Displays a windowed view of issues with:
- * - Column headers
+ * Displays a scrollable list of issues with:
+ * - Column headers (fixed at top)
  * - Selectable issue rows with status indicators
  * - Error banner when fetch fails
  * - Empty state when no issues
+ *
+ * Uses scrollbox for native scrolling, auto-scrolls to keep selection visible.
  */
 export const IssueList = (props: IssueListProps): JSX.Element => {
-	// Calculate visible window of issues
-	const visibleIssues = () =>
-		props.issues.slice(props.windowStart, props.windowStart + props.visibleCount);
+	let scrollRef: ScrollBoxRenderable | undefined;
+
+	// Auto-scroll to keep selection visible when it changes
+	createEffect(() => {
+		const idx = props.selectedIndex;
+		if (scrollRef && idx >= 0) {
+			// Each row is height 1, so scroll position = index
+			// Keep selection roughly centered by offsetting
+			const visibleHeight = scrollRef.height;
+			const targetScroll = Math.max(0, idx - Math.floor(visibleHeight / 2));
+			scrollRef.scrollTop = targetScroll;
+		}
+	});
 
 	return (
 		<box width="100%" height="100%" flexDirection="column">
@@ -221,14 +234,16 @@ export const IssueList = (props: IssueListProps): JSX.Element => {
 			<Show when={props.issues.length > 0} fallback={<EmptyState />}>
 				<box width="100%" flexGrow={1} flexDirection="column">
 					<ListHeader />
-					<For each={visibleIssues()}>
-						{(issue, i) => (
-							<IssueRow
-								issue={issue}
-								isSelected={props.windowStart + i() === props.selectedIndex}
-							/>
-						)}
-					</For>
+					<scrollbox
+						ref={(r) => {
+							scrollRef = r;
+						}}
+						flexGrow={1}
+					>
+						<For each={props.issues}>
+							{(issue, i) => <IssueRow issue={issue} isSelected={i() === props.selectedIndex} />}
+						</For>
+					</scrollbox>
 				</box>
 			</Show>
 		</box>

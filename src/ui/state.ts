@@ -38,49 +38,6 @@ export type ScreenState = Data.TaggedEnum<{
 export const ScreenState = Data.taggedEnum<ScreenState>();
 
 // ----------------------------------------------------------------------------
-// Window Calculation
-// ----------------------------------------------------------------------------
-
-/**
- * Calculates the window start position to keep the selected item visible.
- *
- * @param selectedIndex - Currently selected index
- * @param currentWindowStart - Current window start position
- * @param visibleCount - Number of visible items
- * @param totalCount - Total number of items
- * @returns New window start position
- */
-export const calculateWindowStart = (
-	selectedIndex: number,
-	currentWindowStart: number,
-	visibleCount: number,
-	totalCount: number,
-): number => {
-	// Handle empty list
-	if (totalCount === 0) {
-		return 0;
-	}
-
-	// Clamp selectedIndex to valid range
-	const clampedIndex = Math.max(0, Math.min(selectedIndex, totalCount - 1));
-
-	// If selection is above the window, scroll up
-	if (clampedIndex < currentWindowStart) {
-		return clampedIndex;
-	}
-
-	// If selection is below the window, scroll down
-	if (clampedIndex >= currentWindowStart + visibleCount) {
-		return clampedIndex - visibleCount + 1;
-	}
-
-	// Selection is visible, keep current window
-	// But ensure window doesn't extend past the end
-	const maxWindowStart = Math.max(0, totalCount - visibleCount);
-	return Math.min(currentWindowStart, maxWindowStart);
-};
-
-// ----------------------------------------------------------------------------
 // App State Store
 // ----------------------------------------------------------------------------
 
@@ -95,8 +52,6 @@ export interface AppState {
 	readonly issues: Accessor<readonly Issue[]>;
 	/** Currently selected issue index */
 	readonly selectedIndex: Accessor<number>;
-	/** First visible issue index (for windowing) */
-	readonly windowStart: Accessor<number>;
 	/** Whether data is currently loading */
 	readonly isLoading: Accessor<boolean>;
 	/** Current spinner frame index (0-9) */
@@ -122,25 +77,23 @@ export interface AppState {
 	readonly setIssues: (issues: readonly Issue[]) => void;
 
 	/**
-	 * Move selection up or down.
+	 * Move selection up or down by one.
 	 * @param direction - "up" or "down"
-	 * @param visibleCount - Number of visible items (for window calculation)
 	 */
-	readonly moveSelection: (direction: "up" | "down", visibleCount: number) => void;
+	readonly moveSelection: (direction: "up" | "down") => void;
 
 	/**
 	 * Jump selection to top or bottom of list.
 	 * @param position - "top" or "bottom"
-	 * @param visibleCount - Number of visible items (for window calculation)
 	 */
-	readonly jumpSelection: (position: "top" | "bottom", visibleCount: number) => void;
+	readonly jumpSelection: (position: "top" | "bottom") => void;
 
 	/**
-	 * Move selection by half a page (vi-style Ctrl+D/Ctrl+U).
+	 * Move selection by a specified amount (for page up/down).
 	 * @param direction - "up" or "down"
-	 * @param visibleCount - Number of visible items
+	 * @param amount - Number of items to move
 	 */
-	readonly pageMove: (direction: "up" | "down", visibleCount: number) => void;
+	readonly pageMove: (direction: "up" | "down", amount: number) => void;
 
 	/**
 	 * Open the currently selected issue (navigate to detail screen).
@@ -200,7 +153,6 @@ export const createAppState = (): AppState => {
 	const [screen, setScreen] = createSignal<ScreenState>(ScreenState.List());
 	const [issues, setIssuesSignal] = createSignal<readonly Issue[]>([]);
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
-	const [windowStart, setWindowStart] = createSignal(0);
 	const [isLoading, setIsLoading] = createSignal(false);
 	const [spinnerFrame, setSpinnerFrame] = createSignal(0);
 	const [error, setError] = createSignal<string | null>(null);
@@ -218,44 +170,26 @@ export const createAppState = (): AppState => {
 		setSelectedIndex((current) => Math.min(current, Math.max(0, newIssues.length - 1)));
 	};
 
-	const moveSelection = (direction: "up" | "down", visibleCount: number): void => {
+	const moveSelection = (direction: "up" | "down"): void => {
 		const delta = direction === "up" ? -1 : 1;
 		const currentIssues = issues();
 		const maxIndex = Math.max(0, currentIssues.length - 1);
 
-		setSelectedIndex((current) => {
-			const newIndex = Math.max(0, Math.min(current + delta, maxIndex));
-			// Update window start based on new selection
-			setWindowStart((currentStart) =>
-				calculateWindowStart(newIndex, currentStart, visibleCount, currentIssues.length),
-			);
-			return newIndex;
-		});
+		setSelectedIndex((current) => Math.max(0, Math.min(current + delta, maxIndex)));
 	};
 
-	const jumpSelection = (position: "top" | "bottom", visibleCount: number): void => {
+	const jumpSelection = (position: "top" | "bottom"): void => {
 		const currentIssues = issues();
 		const newIndex = position === "top" ? 0 : Math.max(0, currentIssues.length - 1);
-
 		setSelectedIndex(newIndex);
-		setWindowStart((currentStart) =>
-			calculateWindowStart(newIndex, currentStart, visibleCount, currentIssues.length),
-		);
 	};
 
-	const pageMove = (direction: "up" | "down", visibleCount: number): void => {
-		const halfPage = Math.max(1, Math.floor(visibleCount / 2));
-		const delta = direction === "up" ? -halfPage : halfPage;
+	const pageMove = (direction: "up" | "down", amount: number): void => {
+		const delta = direction === "up" ? -amount : amount;
 		const currentIssues = issues();
 		const maxIndex = Math.max(0, currentIssues.length - 1);
 
-		setSelectedIndex((current) => {
-			const newIndex = Math.max(0, Math.min(current + delta, maxIndex));
-			setWindowStart((currentStart) =>
-				calculateWindowStart(newIndex, currentStart, visibleCount, currentIssues.length),
-			);
-			return newIndex;
-		});
+		setSelectedIndex((current) => Math.max(0, Math.min(current + delta, maxIndex)));
 	};
 
 	const openSelected = (): void => {
@@ -307,7 +241,6 @@ export const createAppState = (): AppState => {
 		screen,
 		issues,
 		selectedIndex,
-		windowStart,
 		isLoading,
 		spinnerFrame,
 		error,

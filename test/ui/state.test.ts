@@ -2,7 +2,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import type { Issue, SentrySourceData } from "../../src/domain/issue.js";
 import { IssueSource, IssueState } from "../../src/domain/issue.js";
-import { ScreenState, calculateWindowStart, createAppState } from "../../src/ui/state.js";
+import { ScreenState, createAppState } from "../../src/ui/state.js";
 
 // =============================================================================
 // Test Helpers
@@ -53,34 +53,7 @@ describe("ScreenState", () => {
 	});
 });
 
-// ----------------------------------------------------------------------------
-// calculateWindowStart Tests
-// ----------------------------------------------------------------------------
-
-describe("calculateWindowStart", () => {
-	it("returns 0 for empty list", () => {
-		expect(calculateWindowStart(0, 0, 10, 0)).toBe(0);
-	});
-
-	it("keeps current window when selection is visible", () => {
-		expect(calculateWindowStart(5, 0, 10, 20)).toBe(0);
-	});
-
-	it("scrolls up when selection is above window", () => {
-		expect(calculateWindowStart(2, 5, 10, 20)).toBe(2);
-	});
-
-	it("scrolls down when selection is below window", () => {
-		expect(calculateWindowStart(15, 0, 10, 20)).toBe(6);
-	});
-
-	it("clamps window to not extend past end when visible within window", () => {
-		// 20 items, window at 15 (showing 15-24 but only 15-19 exist), selected 17
-		// maxWindowStart = max(0, 20 - 10) = 10
-		// selection 17 is within window 15-24, so window stays but clamps to 10
-		expect(calculateWindowStart(17, 15, 10, 20)).toBe(10);
-	});
-});
+// NOTE: calculateWindowStart was removed - scrollbox now handles windowing natively
 
 // ----------------------------------------------------------------------------
 // createAppState Tests
@@ -153,8 +126,8 @@ describe("createAppState", () => {
 		it("clamps selectedIndex when issues shrink", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
-			state.moveSelection("down", 10);
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
+			state.moveSelection("down");
 			expect(state.selectedIndex()).toBe(2);
 
 			state.setIssues([makeIssue("1")]);
@@ -216,7 +189,7 @@ describe("createAppState", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
 
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
 
 			expect(state.selectedIndex()).toBe(1);
 		});
@@ -224,10 +197,10 @@ describe("createAppState", () => {
 		it("moves selection up", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
-			state.moveSelection("down", 10);
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
+			state.moveSelection("down");
 
-			state.moveSelection("up", 10);
+			state.moveSelection("up");
 
 			expect(state.selectedIndex()).toBe(1);
 		});
@@ -235,10 +208,10 @@ describe("createAppState", () => {
 		it("clamps at bottom", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
-			state.moveSelection("down", 10);
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
+			state.moveSelection("down");
 
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
 
 			expect(state.selectedIndex()).toBe(2);
 		});
@@ -247,7 +220,7 @@ describe("createAppState", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
 
-			state.moveSelection("up", 10);
+			state.moveSelection("up");
 
 			expect(state.selectedIndex()).toBe(0);
 		});
@@ -257,10 +230,10 @@ describe("createAppState", () => {
 		it("jumps to top", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
-			state.moveSelection("down", 10);
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
+			state.moveSelection("down");
 
-			state.jumpSelection("top", 10);
+			state.jumpSelection("top");
 
 			expect(state.selectedIndex()).toBe(0);
 		});
@@ -269,30 +242,30 @@ describe("createAppState", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
 
-			state.jumpSelection("bottom", 10);
+			state.jumpSelection("bottom");
 
 			expect(state.selectedIndex()).toBe(2);
 		});
 	});
 
 	describe("pageMove", () => {
-		it("moves down by half page", () => {
+		it("moves down by specified amount", () => {
 			const state = createAppState();
 			const issues = Array.from({ length: 20 }, (_, i) => makeIssue(String(i + 1)));
 			state.setIssues(issues);
 
-			state.pageMove("down", 10); // half page = 5
+			state.pageMove("down", 5);
 
 			expect(state.selectedIndex()).toBe(5);
 		});
 
-		it("moves up by half page", () => {
+		it("moves up by specified amount", () => {
 			const state = createAppState();
 			const issues = Array.from({ length: 20 }, (_, i) => makeIssue(String(i + 1)));
 			state.setIssues(issues);
-			state.jumpSelection("bottom", 10);
+			state.jumpSelection("bottom");
 
-			state.pageMove("up", 10); // half page = 5
+			state.pageMove("up", 5);
 
 			expect(state.selectedIndex()).toBe(14);
 		});
@@ -302,7 +275,7 @@ describe("createAppState", () => {
 		it("navigates to detail screen for selected issue", () => {
 			const state = createAppState();
 			state.setIssues([makeIssue("1"), makeIssue("2"), makeIssue("3")]);
-			state.moveSelection("down", 10);
+			state.moveSelection("down");
 
 			state.openSelected();
 
