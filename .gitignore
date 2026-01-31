@@ -3,6 +3,7 @@ node_modules/
 
 # Glass data directory
 .glass/
+glass.toml
 
 # Build outputs
 dist/
