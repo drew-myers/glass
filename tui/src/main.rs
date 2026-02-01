@@ -75,8 +75,9 @@ async fn main() -> Result<()> {
     // Create app state
     let mut app = App::new(args.server);
 
-    // Initial data fetch
-    app.refresh().await;
+    // Initial data fetch: load cached first (fast), then refresh from Sentry in background
+    app.load_cached().await;
+    app.start_refresh();
 
     // Main loop
     let res = run_app(&mut terminal, &mut app).await;
@@ -102,6 +103,9 @@ async fn run_app(
     app: &mut App,
 ) -> Result<()> {
     loop {
+        // Poll for background task completions
+        app.poll_background();
+
         // Draw UI
         terminal.draw(|f| ui::draw(f, app))?;
 
@@ -120,7 +124,7 @@ async fn run_app(
                         KeyCode::Char('k') | KeyCode::Up => app.move_selection(-1),
                         KeyCode::Char('g') => app.jump_to_top(),
                         KeyCode::Char('G') => app.jump_to_bottom(),
-                        KeyCode::Char('r') => app.refresh().await,
+                        KeyCode::Char('r') => app.start_refresh(),
                         KeyCode::Enter => {
                             app.open_selected();
                             app.refresh_current_issue().await;

@@ -21,10 +21,17 @@ impl ApiClient {
         }
     }
 
-    /// List all issues.
+    /// List all issues (returns cached data from DB).
     pub async fn list_issues(&self) -> Result<ListIssuesResponse> {
         let url = format!("{}/api/v1/issues", self.base_url);
         let response = self.client.get(&url).send().await?.json().await?;
+        Ok(response)
+    }
+
+    /// Refresh issues from Sentry and return updated list.
+    pub async fn refresh_issues(&self) -> Result<ListIssuesResponse> {
+        let url = format!("{}/api/v1/issues/refresh", self.base_url);
+        let response = self.client.post(&url).send().await?.json().await?;
         Ok(response)
     }
 

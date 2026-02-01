@@ -39,7 +39,7 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = if app.is_loading {
+    let title = if app.is_loading || app.is_refreshing {
         " Glass ◐ "
     } else {
         " Glass "

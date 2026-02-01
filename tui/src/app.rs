@@ -1,6 +1,8 @@
 //! Application state and logic.
 
-use crate::api::{ApiClient, Issue, IssueDetail};
+use crate::api::{ApiClient, Issue, IssueDetail, ListIssuesResponse};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// Current screen being displayed.
 #[derive(Debug, Clone, PartialEq)]
@@ -9,10 +11,22 @@ pub enum Screen {
     Detail,
 }
 
+/// Messages from background tasks.
+pub enum BackgroundMessage {
+    /// Refresh completed with result
+    RefreshComplete(Result<ListIssuesResponse, String>),
+}
+
 /// Main application state.
 pub struct App {
     /// API client for server communication
-    client: ApiClient,
+    client: Arc<ApiClient>,
+
+    /// Channel receiver for background task results
+    bg_rx: mpsc::Receiver<BackgroundMessage>,
+
+    /// Channel sender for background tasks (cloned into spawned tasks)
+    bg_tx: mpsc::Sender<BackgroundMessage>,
 
     /// Current screen
     pub screen: Screen,
@@ -29,8 +43,11 @@ pub struct App {
     /// Scroll offset for detail view
     pub detail_scroll: usize,
 
-    /// Loading state
+    /// Loading state (for synchronous operations)
     pub is_loading: bool,
+
+    /// Whether a background refresh is in progress
+    pub is_refreshing: bool,
 
     /// Error message to display
     pub error: Option<String>,
@@ -41,22 +58,25 @@ pub struct App {
 
 impl App {
     pub fn new(server_url: String) -> Self {
+        let (bg_tx, bg_rx) = mpsc::channel(16);
         Self {
-            client: ApiClient::new(server_url),
+            client: Arc::new(ApiClient::new(server_url)),
+            bg_rx,
+            bg_tx,
             screen: Screen::List,
             issues: Vec::new(),
             selected_index: 0,
             current_issue: None,
             detail_scroll: 0,
             is_loading: false,
+            is_refreshing: false,
             error: None,
             should_quit: false,
         }
     }
 
-    /// Refresh issues from server.
-    pub async fn refresh(&mut self) {
-        self.is_loading = true;
+    /// Load cached issues from server (fast, synchronous).
+    pub async fn load_cached(&mut self) {
         self.error = None;
 
         match self.client.list_issues().await {
@@ -71,8 +91,52 @@ impl App {
                 self.error = Some(format!("Failed to fetch issues: {}", e));
             }
         }
+    }
 
-        self.is_loading = false;
+    /// Start a background refresh from Sentry.
+    pub fn start_refresh(&mut self) {
+        if self.is_refreshing {
+            return; // Already refreshing
+        }
+
+        self.is_refreshing = true;
+        self.error = None;
+
+        let client = Arc::clone(&self.client);
+        let tx = self.bg_tx.clone();
+
+        tokio::spawn(async move {
+            let result = client
+                .refresh_issues()
+                .await
+                .map_err(|e| format!("Failed to refresh issues: {}", e));
+
+            // Send result back (ignore error if receiver dropped)
+            let _ = tx.send(BackgroundMessage::RefreshComplete(result)).await;
+        });
+    }
+
+    /// Poll for background task completions. Call this from the main loop.
+    pub fn poll_background(&mut self) {
+        while let Ok(msg) = self.bg_rx.try_recv() {
+            match msg {
+                BackgroundMessage::RefreshComplete(result) => {
+                    self.is_refreshing = false;
+                    match result {
+                        Ok(response) => {
+                            self.issues = response.issues;
+                            // Clamp selection to valid range
+                            if !self.issues.is_empty() && self.selected_index >= self.issues.len() {
+                                self.selected_index = self.issues.len() - 1;
+                            }
+                        }
+                        Err(e) => {
+                            self.error = Some(e);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Move selection by delta (positive = down, negative = up).
