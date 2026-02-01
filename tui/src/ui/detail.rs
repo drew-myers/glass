@@ -157,6 +157,66 @@ fn draw_content(f: &mut Frame, issue: &IssueDetail, scroll: usize, area: Rect) {
         lines.push(Line::default());
     }
 
+    // Breadcrumbs section
+    if let Some(breadcrumbs) = &issue.source.breadcrumbs {
+        if !breadcrumbs.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "── Breadcrumbs ──",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::default());
+
+            // Show last N breadcrumbs (most recent at bottom)
+            let max_crumbs = 15;
+            let start = breadcrumbs.len().saturating_sub(max_crumbs);
+            for crumb in &breadcrumbs[start..] {
+                let category = crumb.category.as_deref().unwrap_or("?");
+                let message = crumb.message.as_deref().unwrap_or("");
+                let timestamp = crumb.timestamp.as_deref()
+                    .and_then(|ts| ts.split('T').last())
+                    .and_then(|t| t.split('.').next())
+                    .unwrap_or("");
+
+                let color = match category {
+                    "http" | "fetch" => Color::Blue,
+                    "console" => Color::Yellow,
+                    "navigation" | "ui.click" => Color::Magenta,
+                    "error" | "exception" => Color::Red,
+                    _ => Color::DarkGray,
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{:>8} ", timestamp), Style::default().fg(Color::DarkGray)),
+                    Span::styled(format!("{:<12} ", category), Style::default().fg(color)),
+                    Span::raw(truncate_str(message, 60)),
+                ]));
+            }
+            lines.push(Line::default());
+        }
+    }
+
+    // Tags section
+    if let Some(tags) = &issue.source.tags {
+        if !tags.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "── Tags ──",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::default());
+
+            let mut tag_spans: Vec<Span> = Vec::new();
+            for (key, value) in tags {
+                if !tag_spans.is_empty() {
+                    tag_spans.push(Span::raw("  "));
+                }
+                tag_spans.push(Span::styled(format!("{}:", key), Style::default().fg(Color::DarkGray)));
+                tag_spans.push(Span::raw(value));
+            }
+            lines.push(Line::from(tag_spans));
+            lines.push(Line::default());
+        }
+    }
+
     // Proposal section (if in pending_approval state)
     if let IssueState::PendingApproval { proposal, .. } = &issue.state {
         lines.push(Line::from(Span::styled(
@@ -250,5 +310,15 @@ fn format_status(state: &IssueState) -> String {
         IssueState::InProgress { .. } => "in_progress".to_string(),
         IssueState::PendingReview { .. } => "pending_review".to_string(),
         IssueState::Error { .. } => "error".to_string(),
+    }
+}
+
+/// Truncate a string to max length.
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
+        format!("{}…", truncated)
     }
 }
