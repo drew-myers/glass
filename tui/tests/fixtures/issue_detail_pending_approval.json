@@ -1,0 +1,23 @@
+{
+  "id": "67890",
+  "sourceType": "sentry",
+  "status": "pending_approval",
+  "source": {
+    "title": "ReferenceError: user is not defined",
+    "shortId": "PROJ-456",
+    "culprit": "src/auth.ts in validateSession",
+    "eventCount": 43,
+    "userCount": 12,
+    "firstSeen": "2026-01-29T08:00:00.000Z",
+    "lastSeen": "2026-02-01T12:00:00.000Z",
+    "environment": "production",
+    "release": "v2.3.0"
+  },
+  "state": {
+    "status": "pending_approval",
+    "analysisSessionId": "2026-02-01T14-30-00-000Z_abc123.jsonl",
+    "proposal": "## Analysis\n\nThe error occurs in `auth.ts:23` where `user` is referenced before the session is validated.\n\n## Proposed Fix\n\n```diff\n- const name = user.name;\n+ const name = user?.name ?? 'Anonymous';\n```"
+  },
+  "createdAt": "2026-02-01T10:00:00.000Z",
+  "updatedAt": "2026-02-01T14:30:00.000Z"
+}

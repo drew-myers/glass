@@ -1,6 +1,6 @@
 ---
 id: gla-d38x
-status: open
+status: closed
 deps: [gla-ua27]
 links: []
 created: 2026-01-30T17:06:10Z
@@ -29,3 +29,9 @@ Detect when analysis is complete and transition to PendingApproval state
 - State transitions to PendingApproval
 - UI shows approve/reject/changes options
 
+
+## Notes
+
+**2026-02-01T22:03:55Z**
+
+Folded into gla-yckp (Server: Analyze issue endpoint)

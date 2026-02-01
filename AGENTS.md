@@ -1,66 +1,97 @@
-Glass is a TUI application for orchestrating Sentry issue fixes via coding agents. See [DESIGN.md](./DESIGN.md) for full architecture and [RFC-001](docs/RFC-001-pi-sdk-migration.md) for agent integration details.
+Glass is an issue orchestration system for fixing Sentry issues via coding agents.
 
-This project uses `tk` for ticket management (`tk --help` for commands). All tickets are stored in `.tickets/`.
+## Architecture (RFC-002)
+
+**Two-component design:**
+- `server/` - TypeScript + Effect + Bun REST API backend
+- `tui/` - Rust + Ratatui terminal UI
+
+See [RFC-002](docs/RFC-002-architecture-redesign.md) for full architecture and API spec.
+See [RFC-001](docs/RFC-001-pi-sdk-migration.md) for Pi SDK integration details.
+
+**Key insight:** Agent interaction is headless by default. The TUI triggers analysis/implementation via REST, Pi runs in background. For interactive sessions, escape hatch shells out to `pi --session <path>`.
+
+## Project Structure
+
+```
+glass/
+├── server/           # TypeScript backend
+│   ├── src/
+│   │   ├── api/      # REST handlers
+│   │   ├── config/   # TOML config loading
+│   │   ├── db/       # SQLite + repositories
+│   │   ├── domain/   # Issue types, state machine
+│   │   ├── services/ # Sentry client, agent service
+│   │   └── main.ts   # Server entry
+│   └── test/
+├── tui/              # Rust frontend
+│   ├── src/
+│   │   ├── api/      # HTTP client, types
+│   │   ├── ui/       # Ratatui views
+│   │   ├── app.rs    # App state
+│   │   ├── server.rs # Server lifecycle
+│   │   └── main.rs   # TUI entry
+│   └── tests/
+├── docs/
+│   ├── RFC-001-pi-sdk-migration.md
+│   └── RFC-002-architecture-redesign.md
+└── justfile          # Build/dev commands
+```
+
+## Development
+
+```bash
+just dev      # Run server + TUI together
+just server   # Server only
+just tui      # TUI only (needs server running)
+just test     # Run all tests
+just dist     # Build distribution binaries
+```
+
+## Ticket Management
+
+Uses `tk` for tickets (`tk --help`). Tickets in `.tickets/`.
+
+```bash
+tk list           # All open tickets
+tk ready          # Tickets with no blockers
+tk blocked        # Tickets waiting on dependencies
+tk show <id>      # View ticket details
+```
 
 **IMPORTANT: Do not begin implementation immediately.** Follow this process:
-
-1. Read the Ticket
-
-2. Read the Design Document
-Key sections to reference based on ticket tags:
-
-| Tag | DESIGN.md Sections |
-|-----|-------------------|
-| `foundation` | Technology Stack, Project Structure |
-| `config` | Configuration |
-| `database` | Persistence |
-| `domain` | Domain Model, Issue State Machine |
-| `ui` | User Interface |
-| `sentry` | API References > Sentry API |
-| `agent` | RFC-001 (Pi SDK integration) |
-| `core` | Service Architecture |
-| `analysis` | Analysis Workflow |
-| `fix` | Fix Workflow |
-
-3. Stop and Discuss
-
-Before writing any code, **stop and discuss the approach** with the user.
-
-4. Mark Ticket In Progress
+1. Read the ticket (`tk show <id>`)
+2. Read relevant docs (RFC-002 for architecture, RFC-001 for agent integration)
+3. **Stop and discuss approach** with user before coding
+4. `tk start <id>` when beginning work
 5. Implement
-6. Add Notes and Close
+6. `tk add-note <id>` with summary, then `tk close <id>`
 
-Effect TS docs https://effect.website/llms-full.txt
+## Code Style
 
-OpenTUI docs:
-https://opentui.com/docs/getting-started
-https://github.com/anomalyco/opentui
+### Server (TypeScript + Effect)
 
-Pi SDK docs:
-https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/docs/sdk.md
-https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/README.md
-
-**IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Effect, OpenTUI, or Pi SDK tasks. Fetch the relevant doc before using unfamiliar APIs.**
-
-### Code Style
-
-- Use Effect patterns consistently (Layers, Services, tagged errors)
+- Use Effect patterns: Layers, Services, tagged errors
 - Prefer `Effect.gen` with generators for sequential code
 - Use `Data.TaggedEnum` for discriminated unions
 - Use `Match` for exhaustive pattern matching
-- Keep functions small and composable
-- Add JSDoc comments for public APIs
+- Use `@effect/vitest` for testing
 
-### Testing
+### TUI (Rust)
 
-- Write tests for domain logic (state machine transitions)
-- Use Effect Layers for dependency injection to handle external deps at test time
-- Use `@effect/vitest` for Effect-aware testing
+- Standard Rust idioms
+- `anyhow` for error handling in main
+- `thiserror` for library errors if needed
+- Serde for JSON deserialization (test with fixtures)
 
-### Error Handling
+## Key Docs
 
-- When errors need to be tracked, prefer use of Effects "Exit" which is in the style of the famous Haskell "Either"
-- Define tagged error types for each service, if applicable
-- Use `Effect.mapError` to wrap lower-level errors
-- Surface user-friendly messages in the UI
-- Log detailed errors for debugging, log errors in a lot file in the standard XDG compliant location
+| Topic | Document |
+|-------|----------|
+| Architecture & API | [RFC-002](docs/RFC-002-architecture-redesign.md) |
+| Pi SDK integration | [RFC-001](docs/RFC-001-pi-sdk-migration.md) |
+| Effect patterns | https://effect.website/llms-full.txt |
+| Pi SDK | https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/docs/sdk.md |
+| Ratatui | https://ratatui.rs/introduction/ |
+
+**Prefer retrieval-led reasoning** - fetch docs before using unfamiliar APIs.

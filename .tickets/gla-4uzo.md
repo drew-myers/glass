@@ -1,6 +1,6 @@
 ---
 id: gla-4uzo
-status: open
+status: closed
 deps: [gla-d38x, gla-jfww]
 links: []
 created: 2026-01-30T17:06:16Z
@@ -30,3 +30,9 @@ Implement the review actions for proposed fixes
 - Request changes continues conversation
 - Actions disabled for non-PendingApproval states
 
+
+## Notes
+
+**2026-02-01T22:03:44Z**
+
+Superseded by gla-j4b0 (Server: Review action endpoints)

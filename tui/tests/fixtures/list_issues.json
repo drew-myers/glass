@@ -1,0 +1,43 @@
+{
+  "issues": [
+    {
+      "id": "12345",
+      "sourceType": "sentry",
+      "title": "TypeError: Cannot read property 'id' of undefined",
+      "shortId": "PROJ-123",
+      "status": "pending",
+      "eventCount": 127,
+      "userCount": 43,
+      "firstSeen": "2026-01-28T10:00:00.000Z",
+      "lastSeen": "2026-02-01T14:30:00.000Z",
+      "updatedAt": "2026-02-01T14:30:00.000Z"
+    },
+    {
+      "id": "67890",
+      "sourceType": "sentry",
+      "title": "ReferenceError: user is not defined",
+      "shortId": "PROJ-456",
+      "status": "pending_approval",
+      "eventCount": 43,
+      "userCount": 12,
+      "firstSeen": "2026-01-29T08:00:00.000Z",
+      "lastSeen": "2026-02-01T12:00:00.000Z",
+      "updatedAt": "2026-02-01T12:00:00.000Z"
+    },
+    {
+      "id": "11111",
+      "sourceType": "sentry",
+      "title": "NetworkError: Failed to fetch",
+      "shortId": "PROJ-789",
+      "status": "error",
+      "eventCount": 891,
+      "userCount": 234,
+      "firstSeen": "2026-01-25T15:00:00.000Z",
+      "lastSeen": "2026-02-01T16:00:00.000Z",
+      "updatedAt": "2026-02-01T16:00:00.000Z"
+    }
+  ],
+  "total": 3,
+  "limit": 50,
+  "offset": 0
+}

@@ -27,3 +27,10 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Rust
+tui/target/
+
+# Distribution
+dist/
+server/dist/

@@ -1,6 +1,10 @@
-# Glass - Issue Orchestration TUI
+# Glass - Issue Orchestration System
 
-> **Note:** The agent integration uses Pi SDK for in-process execution rather than OpenCode's server-based approach. See [RFC-001](docs/RFC-001-pi-sdk-migration.md) for details. Some sections below still reference the old architecture and will be updated during implementation.
+> ⚠️ **OUTDATED**: This document describes the original OpenTUI-based architecture which has been replaced.
+>
+> **For current architecture, see [RFC-002](docs/RFC-002-architecture-redesign.md)** - Server + Rust TUI design with REST API.
+>
+> The sections below on **Domain Model**, **Issue State Machine**, **Configuration**, and **Persistence** are still accurate. UI and service architecture sections are outdated.
 
 ## Overview
 

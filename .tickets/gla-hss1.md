@@ -1,6 +1,6 @@
 ---
 id: gla-hss1
-status: open
+status: closed
 deps: [gla-fvc3]
 links: []
 created: 2026-01-30T17:07:06Z
@@ -28,3 +28,9 @@ Implement '?' keybind to show help modal with all keybindings
 - Easy to dismiss
 - Readable and well-organized
 
+
+## Notes
+
+**2026-02-01T22:03:41Z**
+
+Obsolete: OpenTUI removed. Can add simple help to Rust TUI later if needed.

@@ -1,6 +1,6 @@
 ---
 id: gla-4ia3
-status: open
+status: closed
 deps: [gla-ugvq, gla-ruxi, gla-nmfm]
 links: []
 created: 2026-01-30T17:05:34Z
@@ -33,3 +33,9 @@ Implement the right pane agent output display with streaming and conversation hi
 - Analysis and fix phases visually separated
 - Scrolling works smoothly
 
+
+## Notes
+
+**2026-02-01T22:03:34Z**
+
+Obsolete: Architecture redesign (RFC-002) replaced OpenTUI with headless Pi + escape hatch. No streaming display needed.

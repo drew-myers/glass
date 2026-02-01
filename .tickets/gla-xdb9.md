@@ -1,6 +1,6 @@
 ---
 id: gla-xdb9
-status: open
+status: closed
 deps: [gla-htpw, gla-nmfm, gla-brhx, gla-ruxi, gla-2bst]
 links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:05:57Z
@@ -44,3 +44,9 @@ Implement the main orchestrator service that ties together state, sessions, and 
 - State persisted to database
 - Invalid transitions rejected with clear errors
 - `sendMessage()` forwards to active session's `prompt()`
+
+## Notes
+
+**2026-02-01T22:04:06Z**
+
+Obsolete: Architecture redesign simplified to REST handlers. No complex orchestration service needed.

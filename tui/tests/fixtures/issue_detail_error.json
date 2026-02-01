@@ -1,0 +1,20 @@
+{
+  "id": "11111",
+  "sourceType": "sentry",
+  "status": "error",
+  "source": {
+    "title": "NetworkError: Failed to fetch",
+    "shortId": "PROJ-789",
+    "culprit": "src/api/client.ts in fetchData",
+    "eventCount": 891,
+    "userCount": 234
+  },
+  "state": {
+    "status": "error",
+    "previousStatus": "analyzing",
+    "sessionId": "2026-02-01T16-00-00-000Z_ghi789.jsonl",
+    "error": "Model API rate limited"
+  },
+  "createdAt": "2026-02-01T08:00:00.000Z",
+  "updatedAt": "2026-02-01T16:05:00.000Z"
+}

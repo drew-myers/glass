@@ -1,6 +1,6 @@
 ---
 id: gla-npwt
-status: open
+status: closed
 deps: [gla-wy1q, gla-q6u1]
 links: []
 created: 2026-01-30T17:06:47Z
@@ -30,3 +30,9 @@ Implement the 'd' keybind to cleanup worktree after implementation is complete
 - Server stopped, worktree removed
 - State returns to Pending
 
+
+## Notes
+
+**2026-02-01T22:04:02Z**
+
+Folded into gla-7t1h (Server: Implementation workflow)

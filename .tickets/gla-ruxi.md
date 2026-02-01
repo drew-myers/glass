@@ -1,6 +1,6 @@
 ---
 id: gla-ruxi
-status: open
+status: closed
 deps: [gla-brhx]
 links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:05:27Z
@@ -69,3 +69,9 @@ const subscribeToSession = (
 - Agent completion detected reliably
 - Unsubscribe cleans up properly
 - No reconnection logic needed (in-process)
+
+## Notes
+
+**2026-02-01T22:04:10Z**
+
+Obsolete: Headless Pi execution means no streaming events to handle. Escape hatch uses pi CLI directly.

@@ -1,6 +1,6 @@
 ---
 id: gla-ua27
-status: open
+status: closed
 deps: [gla-xdb9, gla-4ia3]
 links: []
 created: 2026-01-30T17:06:04Z
@@ -30,3 +30,9 @@ Implement the 's' keybind to start analysis on a pending issue
 - Agent output streams to UI
 - Disabled/hidden for non-pending issues
 
+
+## Notes
+
+**2026-02-01T22:03:52Z**
+
+Superseded by gla-yckp (Server: Analyze issue endpoint)

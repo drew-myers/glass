@@ -1,6 +1,6 @@
 ---
 id: gla-1fsx
-status: open
+status: closed
 deps: [gla-xdb9]
 links: []
 created: 2026-01-30T17:06:53Z
@@ -32,3 +32,9 @@ Implement error state handling and UI display
 - Can reject errored issues
 - List shows error status
 
+
+## Notes
+
+**2026-02-01T22:04:13Z**
+
+Folded into endpoint implementations - error handling is simpler now

@@ -1,0 +1,21 @@
+{
+  "id": "67890",
+  "sourceType": "sentry",
+  "status": "in_progress",
+  "source": {
+    "title": "ReferenceError: user is not defined",
+    "shortId": "PROJ-456",
+    "culprit": "src/auth.ts in validateSession",
+    "eventCount": 43,
+    "userCount": 12
+  },
+  "state": {
+    "status": "in_progress",
+    "analysisSessionId": "2026-02-01T14-30-00-000Z_abc123.jsonl",
+    "implementationSessionId": "2026-02-01T15-00-00-000Z_def456.jsonl",
+    "worktreePath": "/Users/me/projects/glass-worktrees/fix-sentry-67890",
+    "worktreeBranch": "fix/sentry-67890"
+  },
+  "createdAt": "2026-02-01T10:00:00.000Z",
+  "updatedAt": "2026-02-01T15:00:00.000Z"
+}

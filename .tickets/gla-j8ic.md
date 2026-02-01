@@ -1,6 +1,6 @@
 ---
 id: gla-j8ic
-status: open
+status: closed
 deps: [gla-xdb9, gla-q6u1]
 links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:07:01Z
@@ -42,3 +42,9 @@ With Pi SDK, session restoration is simpler than SSE reconnection:
 - Missing session files → Error state
 - Missing worktrees → Error state  
 - Orphaned worktrees warned about
+
+## Notes
+
+**2026-02-01T22:04:18Z**
+
+Simplified: Server just reads session paths from DB on startup. No complex restoration.

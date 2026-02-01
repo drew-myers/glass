@@ -1,0 +1,10 @@
+{
+  "analysisSession": {
+    "id": "2026-02-01T14-30-00-000Z_abc123.jsonl",
+    "path": "/Users/me/.pi/agent/sessions/--project--/2026-02-01T14-30-00-000Z_abc123.jsonl"
+  },
+  "implementationSession": {
+    "id": "2026-02-01T15-00-00-000Z_def456.jsonl",
+    "path": "/Users/me/.pi/agent/sessions/--worktree--/2026-02-01T15-00-00-000Z_def456.jsonl"
+  }
+}

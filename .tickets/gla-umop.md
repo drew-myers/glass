@@ -1,7 +1,7 @@
 ---
 id: gla-umop
 status: open
-deps: [gla-npwt, gla-j8ic, gla-1fsx]
+deps: [gla-7t1h]
 links: []
 created: 2026-01-30T17:07:12Z
 type: task

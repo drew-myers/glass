@@ -1,6 +1,6 @@
 ---
 id: gla-jfww
-status: open
+status: closed
 deps: [gla-4ia3]
 links: []
 created: 2026-01-30T17:05:40Z
@@ -30,3 +30,9 @@ Implement the input field for responding to agent questions
 - Messages persisted to DB
 - Focus behavior works correctly
 
+
+## Notes
+
+**2026-02-01T22:03:38Z**
+
+Obsolete: Architecture redesign uses escape hatch to pi CLI instead of embedded input.

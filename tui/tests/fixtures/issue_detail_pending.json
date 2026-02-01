@@ -1,0 +1,61 @@
+{
+  "id": "12345",
+  "sourceType": "sentry",
+  "status": "pending",
+  "source": {
+    "title": "TypeError: Cannot read property 'id' of undefined",
+    "shortId": "PROJ-123",
+    "culprit": "src/handlers/user.ts in getUser",
+    "eventCount": 127,
+    "userCount": 43,
+    "firstSeen": "2026-01-28T10:00:00.000Z",
+    "lastSeen": "2026-02-01T14:30:00.000Z",
+    "metadata": {
+      "type": "TypeError",
+      "value": "Cannot read property 'id' of undefined",
+      "filename": "src/handlers/user.ts",
+      "function": "getUser"
+    },
+    "exceptions": [
+      {
+        "type": "TypeError",
+        "value": "Cannot read property 'id' of undefined",
+        "stacktrace": {
+          "frames": [
+            {
+              "filename": "src/handlers/user.ts",
+              "function": "getUser",
+              "lineno": 42,
+              "colno": 15
+            },
+            {
+              "filename": "src/routes/api.ts",
+              "function": "handleRequest",
+              "lineno": 128,
+              "colno": 8
+            }
+          ]
+        }
+      }
+    ],
+    "breadcrumbs": [
+      {
+        "type": "navigation",
+        "category": "route",
+        "message": "/api/users/me",
+        "timestamp": "2026-02-01T14:29:58.000Z"
+      }
+    ],
+    "environment": "production",
+    "release": "v2.3.1",
+    "tags": {
+      "browser": "Chrome 120",
+      "os": "macOS"
+    }
+  },
+  "state": {
+    "status": "pending"
+  },
+  "createdAt": "2026-02-01T12:00:00.000Z",
+  "updatedAt": "2026-02-01T14:35:00.000Z"
+}

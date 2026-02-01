@@ -1,6 +1,6 @@
 ---
 id: gla-rcss
-status: open
+status: closed
 deps: [gla-4uzo, gla-q6u1, gla-4e89, gla-xdb9]
 links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:06:35Z
@@ -71,3 +71,9 @@ User clicks Approve
 - Progress streams to UI via event subscription
 - Can respond to agent questions via `sendMessage()`
 - State transitions correctly to InProgress
+
+## Notes
+
+**2026-02-01T22:03:47Z**
+
+Superseded by gla-7t1h (Server: Implementation workflow)

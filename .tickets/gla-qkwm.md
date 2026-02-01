@@ -1,6 +1,6 @@
 ---
 id: gla-qkwm
-status: open
+status: closed
 deps: [gla-cu9p]
 links: []
 created: 2026-01-30T17:04:48Z
@@ -29,3 +29,9 @@ Implement CLI argument parsing for project path and config file
 - glass --help shows usage
 - Invalid paths show clear errors
 
+
+## Notes
+
+**2026-02-01T22:04:21Z**
+
+Done: Rust TUI has clap-based CLI. Server uses project path arg.
