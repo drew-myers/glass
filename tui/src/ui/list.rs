@@ -12,19 +12,26 @@ use crate::app::App;
 
 /// Draw the issue list screen.
 pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
+    // Calculate available width for title column
+    // Layout: " ▶ " (4) + "○ " (2) + "STATUS   " (9) + title + "  " (2) + events (6) + "  " (2) + date (10) + padding
+    // Border takes 2 chars total
+    let fixed_width = 4 + 2 + 9 + 2 + 6 + 2 + 10 + 2; // = 37
+    let title_width = (area.width as usize).saturating_sub(fixed_width).max(20);
+
     let items: Vec<ListItem> = app
         .issues
         .iter()
         .map(|issue| {
             let (icon, color) = status_icon_and_color(&issue.status);
+            let title = pad_or_truncate(&issue.title, title_width);
 
             let spans = vec![
-                Span::styled(format!(" {} ", icon), Style::default().fg(color)),
+                Span::styled(format!("{} ", icon), Style::default().fg(color)),
                 Span::styled(
-                    format!("{:8} ", issue.status.to_uppercase()),
+                    format!("{:9}", issue.status.to_uppercase()),
                     Style::default().fg(color),
                 ),
-                Span::raw(truncate(&issue.title, 50)),
+                Span::raw(title),
                 Span::styled(
                     format!("  {:>6}", issue.event_count),
                     Style::default().fg(Color::DarkGray),
@@ -86,12 +93,16 @@ fn status_icon_and_color(status: &str) -> (&'static str, Color) {
     }
 }
 
-/// Truncate string to max length.
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
+/// Pad or truncate string to exact length.
+fn pad_or_truncate(s: &str, len: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= len {
+        // Pad with spaces
+        format!("{:<width$}", s, width = len)
     } else {
-        format!("{}…", &s[..max_len - 1])
+        // Truncate and add ellipsis
+        let truncated: String = s.chars().take(len.saturating_sub(1)).collect();
+        format!("{}…", truncated)
     }
 }
 
