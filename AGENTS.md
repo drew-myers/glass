@@ -1,6 +1,6 @@
 Glass is a TUI application for orchestrating Sentry issue fixes via coding agents. See [DESIGN.md](./DESIGN.md) for full architecture and [RFC-001](docs/RFC-001-pi-sdk-migration.md) for agent integration details.
 
-This project uses `tk` for ticket management. All tickets are stored in `.tickets/`.
+This project uses `tk` for ticket management (`tk --help` for commands). All tickets are stored in `.tickets/`.
 
 **IMPORTANT: Do not begin implementation immediately.** Follow this process:
 
@@ -40,7 +40,7 @@ Pi SDK docs:
 https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/docs/sdk.md
 https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/README.md
 
-**IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Effect, OpenTUI, or Pi SDK tasks.**
+**IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Effect, OpenTUI, or Pi SDK tasks. Fetch the relevant doc before using unfamiliar APIs.**
 
 ### Code Style
 
