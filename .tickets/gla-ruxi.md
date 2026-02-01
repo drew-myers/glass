@@ -2,32 +2,70 @@
 id: gla-ruxi
 status: open
 deps: [gla-brhx]
-links: []
+links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:05:27Z
 type: task
 priority: 1
 assignee: Drew Myers
 parent: gla-uyi9
-tags: [opencode, streaming]
+tags: [agent, streaming]
 ---
-# OpenCode SSE event stream handling
+# Pi session event handling
 
-Implement SSE event stream subscription and parsing for OpenCode sessions
+Implement event subscription and mapping for Pi SDK agent sessions.
 
 ## Design
 
-- SessionEvent tagged enum: MessageDelta, MessageComplete, StatusChanged, ToolStart, ToolComplete, Error
-- parseSessionEvent() to convert raw SSE to typed events
-- Scoped event stream with automatic cleanup
-- Filter events by session ID
-- Completion detection: MessageComplete + StatusChanged to 'idle'
-- PubSub for broadcasting to multiple subscribers
-- Reconnection logic for dropped connections
+Pi SDK provides events via `session.subscribe()` callback. This ticket covers:
+
+- Map Pi events to Glass domain events (IssueEvent)
+- Completion detection via `agent_end` event
+- Stream text deltas for UI display
+- Track tool executions for visibility
+
+## Event Mapping
+
+| Pi SDK Event | Glass Event |
+|--------------|-------------|
+| `message_update` + `text_delta` | `IssueEvent.AgentMessage` |
+| `message_update` + `thinking_delta` | `IssueEvent.AgentThinking` (optional) |
+| `agent_end` | `IssueEvent.AgentComplete` |
+| `tool_execution_start` | `IssueEvent.ToolStart` (optional) |
+| `tool_execution_end` | `IssueEvent.ToolComplete` (optional) |
+
+## Implementation
+
+```typescript
+const subscribeToSession = (
+  session: AgentSession,
+  issueId: string,
+  publish: (event: IssueEvent) => void
+) => {
+  return session.subscribe((event) => {
+    switch (event.type) {
+      case "message_update":
+        if (event.assistantMessageEvent.type === "text_delta") {
+          publish(IssueEvent.AgentMessage({
+            issueId,
+            sessionId: session.sessionId,
+            content: event.assistantMessageEvent.delta,
+          }));
+        }
+        break;
+      case "agent_end":
+        publish(IssueEvent.AgentComplete({
+          issueId,
+          sessionId: session.sessionId,
+        }));
+        break;
+    }
+  });
+};
+```
 
 ## Acceptance Criteria
 
-- Can subscribe to session events
-- Events correctly parsed and typed
-- Stream cleans up on scope close
-- Detects when agent is waiting for input
-
+- Text deltas forwarded to UI in real-time
+- Agent completion detected reliably
+- Unsubscribe cleans up properly
+- No reconnection logic needed (in-process)

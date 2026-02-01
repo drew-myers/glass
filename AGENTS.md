@@ -1,4 +1,4 @@
-Glass is a TUI application for orchestrating Sentry issue fixes via OpenCode agents. See [DESIGN.md](./DESIGN.md) for full architecture and specifications.
+Glass is a TUI application for orchestrating Sentry issue fixes via coding agents. See [DESIGN.md](./DESIGN.md) for full architecture and [RFC-001](docs/RFC-001-pi-sdk-migration.md) for agent integration details.
 
 This project uses `tk` for ticket management. All tickets are stored in `.tickets/`.
 
@@ -17,10 +17,10 @@ Key sections to reference based on ticket tags:
 | `domain` | Domain Model, Issue State Machine |
 | `ui` | User Interface |
 | `sentry` | API References > Sentry API |
-| `opencode` | OpenCode Integration, API References > OpenCode SDK |
+| `agent` | RFC-001 (Pi SDK integration) |
 | `core` | Service Architecture |
-| `analysis` | Analysis Workflow (in OpenCode Integration) |
-| `fix` | Fix Workflow (in OpenCode Integration) |
+| `analysis` | Analysis Workflow |
+| `fix` | Fix Workflow |
 
 3. Stop and Discuss
 
@@ -36,11 +36,11 @@ OpenTUI docs:
 https://opentui.com/docs/getting-started
 https://github.com/anomalyco/opentui
 
-Opencode SDK docs:
-https://opencode.ai/docs/sdk
-https://opencode.ai/docs/server
+Pi SDK docs:
+https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/docs/sdk.md
+https://raw.githubusercontent.com/badlogic/pi-mono/refs/heads/main/packages/coding-agent/README.md
 
-**IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Effect, OpenTUI, or OpenCode SDK tasks.**
+**IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Effect, OpenTUI, or Pi SDK tasks.**
 
 ### Code Style
 
@@ -64,4 +64,3 @@ https://opencode.ai/docs/server
 - Use `Effect.mapError` to wrap lower-level errors
 - Surface user-friendly messages in the UI
 - Log detailed errors for debugging, log errors in a lot file in the standard XDG compliant location
-

@@ -1,8 +1,10 @@
 # Glass - Issue Orchestration TUI
 
+> **Note:** The agent integration uses Pi SDK for in-process execution rather than OpenCode's server-based approach. See [RFC-001](docs/RFC-001-pi-sdk-migration.md) for details. Some sections below still reference the old architecture and will be updated during implementation.
+
 ## Overview
 
-Glass is a terminal user interface (TUI) application that helps software engineers automatically fix issues by orchestrating OpenCode coding agents. It presents a list of issues from various sources (Sentry, GitHub, local tickets), allows drill-down analysis, and coordinates an approval-based workflow where agents propose fixes that humans review before implementation.
+Glass is a terminal user interface (TUI) application that helps software engineers automatically fix issues by orchestrating coding agents. It presents a list of issues from various sources (Sentry, GitHub, local tickets), allows drill-down analysis, and coordinates an approval-based workflow where agents propose fixes that humans review before implementation.
 
 ### North Star UX References
 

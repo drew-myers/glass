@@ -8,7 +8,7 @@ type: task
 priority: 1
 assignee: Drew Myers
 parent: gla-uyi9
-tags: [ui, opencode]
+tags: [ui, agent]
 ---
 # Agent output display component
 
