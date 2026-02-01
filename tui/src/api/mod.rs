@@ -35,10 +35,17 @@ impl ApiClient {
         Ok(response)
     }
 
-    /// Get issue detail.
+    /// Get issue detail (returns cached data from DB).
     pub async fn get_issue(&self, id: &str) -> Result<IssueDetail> {
         let url = format!("{}/api/v1/issues/{}", self.base_url, id);
         let response = self.client.get(&url).send().await?.json().await?;
+        Ok(response)
+    }
+
+    /// Refresh a single issue from Sentry and return updated detail.
+    pub async fn refresh_issue(&self, id: &str) -> Result<IssueDetail> {
+        let url = format!("{}/api/v1/issues/{}/refresh", self.base_url, id);
+        let response = self.client.post(&url).send().await?.json().await?;
         Ok(response)
     }
 

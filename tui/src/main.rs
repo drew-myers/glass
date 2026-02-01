@@ -127,7 +127,8 @@ async fn run_app(
                         KeyCode::Char('r') => app.start_refresh(),
                         KeyCode::Enter => {
                             app.open_selected();
-                            app.refresh_current_issue().await;
+                            app.load_cached_detail().await;
+                            app.start_detail_refresh();
                         }
                         _ => {}
                     },
@@ -135,6 +136,7 @@ async fn run_app(
                         KeyCode::Char('q') | KeyCode::Esc => app.back_to_list(),
                         KeyCode::Char('j') | KeyCode::Down => app.scroll_detail(1),
                         KeyCode::Char('k') | KeyCode::Up => app.scroll_detail(-1),
+                        KeyCode::Char('r') => app.start_detail_refresh(),
                         KeyCode::Char('i') => {
                             // Escape hatch to interactive pi
                             if let Some(session_path) = app.get_session_path().await {

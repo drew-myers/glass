@@ -256,3 +256,130 @@ export const refreshIssuesHandler = Effect.gen(function* () {
 		),
 	),
 );
+
+/**
+ * POST /api/v1/issues/:id/refresh
+ *
+ * Fetches fresh data for a single issue from Sentry, updates the local database,
+ * and returns the updated issue detail (same format as GET /issues/:id).
+ */
+export const refreshIssueHandler = Effect.gen(function* () {
+	const sentry = yield* SentryService;
+	const issueRepo = yield* SentryIssueRepository;
+	const request = yield* HttpServerRequest.HttpServerRequest;
+
+	// Extract ID from path params (format: /api/v1/issues/:id/refresh)
+	const url = new URL(request.url, "http://localhost");
+	const pathParts = url.pathname.split("/");
+	const id = pathParts[pathParts.length - 2]; // Second to last segment
+
+	if (!id) {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "VALIDATION_ERROR",
+					message: "Issue ID is required",
+				},
+			},
+			{ status: 400 },
+		);
+	}
+
+	// Look up the issue to get the Sentry ID
+	const maybeIssue = yield* issueRepo.getById(id).pipe(
+		Effect.catchAll(() => Effect.succeed(Option.none<Issue>())),
+	);
+
+	let issue: Issue | null = Option.isSome(maybeIssue) ? maybeIssue.value : null;
+
+	if (!issue) {
+		const maybeIssue2 = yield* issueRepo.getById(`sentry:${id}`).pipe(
+			Effect.catchAll(() => Effect.succeed(Option.none<Issue>())),
+		);
+		issue = Option.isSome(maybeIssue2) ? maybeIssue2.value : null;
+	}
+
+	if (!issue || issue.source._tag !== "Sentry") {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "NOT_FOUND",
+					message: `Issue not found: ${id}`,
+				},
+			},
+			{ status: 404 },
+		);
+	}
+
+	const sentryId = issue.source.data.sentryId;
+
+	// Fetch fresh data from Sentry
+	const [issueSource, eventData] = yield* Effect.all([
+		sentry.getIssue(sentryId),
+		sentry.getLatestEvent(sentryId),
+	]).pipe(
+		Effect.mapError((error) => ({
+			_tag: "SentryError" as const,
+			error,
+		})),
+	);
+
+	if (issueSource._tag !== "Sentry") {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Unexpected issue source type",
+				},
+			},
+			{ status: 500 },
+		);
+	}
+
+	// Merge issue data with event data (only include defined optional fields)
+	const mergedData = {
+		...issueSource.data,
+		...(eventData.exceptions && { exceptions: eventData.exceptions }),
+		...(eventData.breadcrumbs && { breadcrumbs: eventData.breadcrumbs }),
+		...(eventData.environment && { environment: eventData.environment }),
+		...(eventData.release && { release: eventData.release }),
+		...(eventData.tags && { tags: eventData.tags }),
+	};
+
+	// Upsert the updated issue
+	const updatedIssue = yield* issueRepo.upsert({
+		id: sentryId,
+		project: issueSource.project,
+		data: mergedData,
+	}).pipe(
+		Effect.mapError((error) => ({
+			_tag: "DbError" as const,
+			error,
+		})),
+	);
+
+	return yield* HttpServerResponse.json(mapIssueToDetail(updatedIssue));
+}).pipe(
+	Effect.catchTag("SentryError", (e) =>
+		HttpServerResponse.json(
+			{
+				error: {
+					code: "SENTRY_ERROR",
+					message: `Failed to fetch issue from Sentry: ${e.error._tag}`,
+				},
+			},
+			{ status: 502 },
+		),
+	),
+	Effect.catchTag("DbError", () =>
+		HttpServerResponse.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Failed to update issue in database",
+				},
+			},
+			{ status: 500 },
+		),
+	),
+);

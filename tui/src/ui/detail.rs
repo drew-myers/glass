@@ -57,11 +57,19 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 
     let (icon, color) = status_icon_and_color(&status);
 
+    // Show spinner if refreshing
+    let refresh_indicator = if app.is_refreshing_detail || app.is_loading {
+        " ◐"
+    } else {
+        ""
+    };
+
     let header_text = vec![Line::from(vec![
         Span::raw(" "),
         Span::styled(title, Style::default().add_modifier(Modifier::BOLD)),
         Span::raw("  "),
         Span::styled(format!("{} {}", icon, status.to_uppercase()), Style::default().fg(color)),
+        Span::styled(refresh_indicator, Style::default().fg(Color::Yellow)),
     ])];
 
     let header = Paragraph::new(header_text)

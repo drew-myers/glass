@@ -49,6 +49,7 @@ fn draw_action_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         Screen::Detail => {
             let mut binds = vec![
                 ("↑↓/jk", "scroll"),
+                ("r", "refresh"),
                 ("q/Esc", "back"),
             ];
 

@@ -13,8 +13,10 @@ pub enum Screen {
 
 /// Messages from background tasks.
 pub enum BackgroundMessage {
-    /// Refresh completed with result
-    RefreshComplete(Result<ListIssuesResponse, String>),
+    /// List refresh completed with result
+    ListRefreshComplete(Result<ListIssuesResponse, String>),
+    /// Detail refresh completed with result
+    DetailRefreshComplete(Result<IssueDetail, String>),
 }
 
 /// Main application state.
@@ -46,8 +48,11 @@ pub struct App {
     /// Loading state (for synchronous operations)
     pub is_loading: bool,
 
-    /// Whether a background refresh is in progress
+    /// Whether a background list refresh is in progress
     pub is_refreshing: bool,
+
+    /// Whether a background detail refresh is in progress
+    pub is_refreshing_detail: bool,
 
     /// Error message to display
     pub error: Option<String>,
@@ -70,6 +75,7 @@ impl App {
             detail_scroll: 0,
             is_loading: false,
             is_refreshing: false,
+            is_refreshing_detail: false,
             error: None,
             should_quit: false,
         }
@@ -112,7 +118,7 @@ impl App {
                 .map_err(|e| format!("Failed to refresh issues: {}", e));
 
             // Send result back (ignore error if receiver dropped)
-            let _ = tx.send(BackgroundMessage::RefreshComplete(result)).await;
+            let _ = tx.send(BackgroundMessage::ListRefreshComplete(result)).await;
         });
     }
 
@@ -120,7 +126,7 @@ impl App {
     pub fn poll_background(&mut self) {
         while let Ok(msg) = self.bg_rx.try_recv() {
             match msg {
-                BackgroundMessage::RefreshComplete(result) => {
+                BackgroundMessage::ListRefreshComplete(result) => {
                     self.is_refreshing = false;
                     match result {
                         Ok(response) => {
@@ -129,6 +135,17 @@ impl App {
                             if !self.issues.is_empty() && self.selected_index >= self.issues.len() {
                                 self.selected_index = self.issues.len() - 1;
                             }
+                        }
+                        Err(e) => {
+                            self.error = Some(e);
+                        }
+                    }
+                }
+                BackgroundMessage::DetailRefreshComplete(result) => {
+                    self.is_refreshing_detail = false;
+                    match result {
+                        Ok(detail) => {
+                            self.current_issue = Some(detail);
                         }
                         Err(e) => {
                             self.error = Some(e);
@@ -188,7 +205,49 @@ impl App {
         self.detail_scroll = new_scroll.max(0) as usize;
     }
 
-    /// Refresh current issue detail from server.
+    /// Load cached issue detail from server (fast).
+    pub async fn load_cached_detail(&mut self) {
+        if self.issues.is_empty() {
+            return;
+        }
+
+        let issue_id = &self.issues[self.selected_index].id;
+        self.error = None;
+
+        match self.client.get_issue(issue_id).await {
+            Ok(detail) => {
+                self.current_issue = Some(detail);
+            }
+            Err(e) => {
+                self.error = Some(format!("Failed to fetch issue: {}", e));
+            }
+        }
+    }
+
+    /// Start a background refresh for the current issue from Sentry.
+    pub fn start_detail_refresh(&mut self) {
+        if self.is_refreshing_detail || self.issues.is_empty() {
+            return;
+        }
+
+        let issue_id = self.issues[self.selected_index].id.clone();
+        self.is_refreshing_detail = true;
+        self.error = None;
+
+        let client = Arc::clone(&self.client);
+        let tx = self.bg_tx.clone();
+
+        tokio::spawn(async move {
+            let result = client
+                .refresh_issue(&issue_id)
+                .await
+                .map_err(|e| format!("Failed to refresh issue: {}", e));
+
+            let _ = tx.send(BackgroundMessage::DetailRefreshComplete(result)).await;
+        });
+    }
+
+    /// Refresh current issue detail from server (for use after actions).
     pub async fn refresh_current_issue(&mut self) {
         if self.issues.is_empty() {
             return;
