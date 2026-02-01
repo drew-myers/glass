@@ -232,14 +232,28 @@ GET /issues/:id
 POST /issues/refresh
 ```
 
-Triggers a fresh fetch from all configured sources (Sentry, etc.) and upserts into local DB.
+Triggers a fresh fetch from all configured sources (Sentry, etc.), upserts into local DB, and returns the updated issue list (same format as `GET /issues`).
 
 **Response:**
 ```json
 {
-  "fetched": 42,
-  "created": 5,
-  "updated": 37
+  "issues": [
+    {
+      "id": "sentry:12345",
+      "sourceType": "sentry",
+      "title": "TypeError: Cannot read property 'id' of undefined",
+      "shortId": "PROJ-123",
+      "status": "pending",
+      "eventCount": 127,
+      "userCount": 43,
+      "firstSeen": "2026-01-28T10:00:00Z",
+      "lastSeen": "2026-02-01T14:30:00Z",
+      "updatedAt": "2026-02-01T14:30:00Z"
+    }
+  ],
+  "total": 156,
+  "limit": 50,
+  "offset": 0
 }
 ```
 

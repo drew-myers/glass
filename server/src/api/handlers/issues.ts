@@ -6,6 +6,7 @@ import { HttpServerRequest, HttpServerResponse } from "@effect/platform";
 import { Effect, Option } from "effect";
 import { SentryIssueRepository } from "../../db/index.js";
 import type { Issue } from "../../domain/issue.js";
+import { SentryService } from "../../services/sentry/index.js";
 
 // =============================================================================
 // Response Mappers
@@ -192,3 +193,66 @@ export const getIssueHandler = Effect.gen(function* () {
 	
 	return yield* HttpServerResponse.json(mapIssueToDetail(issue));
 });
+
+/**
+ * POST /api/v1/issues/refresh
+ *
+ * Fetches issues from Sentry, upserts them into the local database,
+ * and returns the full issue list (same format as GET /issues).
+ */
+export const refreshIssuesHandler = Effect.gen(function* () {
+	const sentry = yield* SentryService;
+	const issueRepo = yield* SentryIssueRepository;
+
+	// Fetch issues from Sentry
+	const sources = yield* sentry.listIssues().pipe(
+		Effect.mapError((error) => ({
+			_tag: "SentryError" as const,
+			error,
+		})),
+	);
+
+	// Upsert each issue
+	for (const source of sources) {
+		if (source._tag !== "Sentry") continue;
+
+		const { project, data } = source;
+		const id = data.sentryId;
+
+		yield* issueRepo.upsert({ id, project, data }).pipe(
+			Effect.catchAll((error) =>
+				Effect.logWarning("Failed to upsert issue", { id, error }),
+			),
+		);
+	}
+
+	// Return the full issue list (same as GET /issues)
+	const issues = yield* issueRepo.listAll().pipe(
+		Effect.catchAll((error) => {
+			return Effect.logError("Failed to list issues", { error }).pipe(
+				Effect.map(() => [] as readonly Issue[]),
+			);
+		}),
+	);
+
+	const response = {
+		issues: issues.map(mapIssueToListItem),
+		total: issues.length,
+		limit: 50,
+		offset: 0,
+	};
+
+	return yield* HttpServerResponse.json(response);
+}).pipe(
+	Effect.catchTag("SentryError", (e) =>
+		HttpServerResponse.json(
+			{
+				error: {
+					code: "SENTRY_ERROR",
+					message: `Failed to fetch issues from Sentry: ${e.error._tag}`,
+				},
+			},
+			{ status: 502 },
+		),
+	),
+);
