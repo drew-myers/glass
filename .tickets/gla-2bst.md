@@ -1,6 +1,6 @@
 ---
 id: gla-2bst
-status: open
+status: closed
 deps: [gla-zrqi, gla-jw8k]
 links: [docs/RFC-001-pi-sdk-migration.md]
 created: 2026-01-30T17:05:48Z
@@ -78,3 +78,38 @@ Format your proposal as:
 - Agent uses read-only tools to explore codebase
 - Output follows structured proposal format
 - Proposal is parseable for storage
+
+## Notes
+
+**2026-02-02T01:06:45Z**
+
+Implemented analysis prompt template module:
+
+**Files created:**
+- `server/src/services/prompts/formatters.ts` - Reusable formatters for stacktraces, exceptions, breadcrumbs, requests, user/context info, and tags
+- `server/src/services/prompts/analysis.ts` - `buildAnalysisPrompt(issue)` function that builds the full analysis prompt for Sentry issues
+- `server/src/services/prompts/index.ts` - Module exports
+- `server/test/services/prompts/formatters.test.ts` - 26 tests for formatters
+- `server/test/services/prompts/analysis.test.ts` - 20 tests for prompt builder
+
+**Key features:**
+- Supports all Sentry context: exceptions, stacktraces (with source context + locals), breadcrumbs, HTTP requests, user info, runtime contexts, tags
+- Stacktraces shown in standard order (most recent first)
+- Breadcrumbs limited to last 30 with count of omitted
+- Sensitive headers (auth, cookie) redacted
+- Long values truncated
+- `extractStacktraceFiles()` utility to get in-app file paths from stacktrace
+- Extensible via Match.tag for future GitHub/Ticket sources
+
+**Prompt structure:**
+1. Error Summary (title, type, message, culprit, project)
+2. Impact (events, users, first/last seen)
+3. Environment (if available)
+4. Exception & Stacktrace
+5. Breadcrumbs
+6. HTTP Request (if available)
+7. User/Runtime Context (if available)
+8. Tags
+9. Task instructions (read-only tools, structured output guidance)
+
+All 46 tests pass.
