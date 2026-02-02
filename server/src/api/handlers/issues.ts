@@ -4,7 +4,7 @@
 
 import { HttpServerRequest, HttpServerResponse } from "@effect/platform";
 import { Effect, Option } from "effect";
-import { SentryIssueRepository } from "../../db/index.js";
+import { ConversationRepository, SentryIssueRepository } from "../../db/index.js";
 import type { Issue } from "../../domain/issue.js";
 import { IssueState } from "../../domain/issue.js";
 import { AgentService } from "../../services/agent/index.js";
@@ -404,6 +404,7 @@ export const refreshIssueHandler = Effect.gen(function* () {
 export const analyzeIssueHandler = Effect.gen(function* () {
 	const agentService = yield* AgentService;
 	const issueRepo = yield* SentryIssueRepository;
+	const conversationRepo = yield* ConversationRepository;
 	const request = yield* HttpServerRequest.HttpServerRequest;
 
 	// Extract ID from path params (format: /api/v1/issues/:id/analyze)
@@ -482,25 +483,65 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 	// Build the analysis prompt
 	const prompt = buildAnalysisPrompt(issue);
 
-	// Start analysis in background (fire and forget)
-	// The agent will run and we'll track completion via events
+	// Capture the issue ID for the background task (issue variable may be reassigned)
+	const issueId = issue.id;
+
+	// Start analysis in background
+	// Subscribe to events to capture the proposal when agent completes
 	Effect.runFork(
-		sessionHandle.prompt(prompt).pipe(
-			Effect.tapError((error) =>
-				Effect.gen(function* () {
-					// On error, update issue state to Error
-					yield* issueRepo.updateState(
-						issue.id,
-						IssueState.Error({
-							previousState: "analyzing",
-							sessionId: sessionHandle.sessionId,
-							error: error.message,
-						}),
-					).pipe(Effect.catchAll(() => Effect.void));
-				}),
-			),
-			Effect.catchAll(() => Effect.void),
-		),
+		Effect.async<void, never>((resume) => {
+			let proposalText = "";
+
+			// Subscribe to agent events
+			const unsubscribe = sessionHandle.subscribe((event) => {
+				if (event.type === "message_update") {
+					// Accumulate text from assistant messages
+					const assistantEvent = event.assistantMessageEvent;
+					if (assistantEvent.type === "text_delta") {
+						proposalText += assistantEvent.delta;
+					}
+				} else if (event.type === "agent_end") {
+					// Agent finished - save proposal and update state to PendingApproval
+					unsubscribe();
+					Effect.runPromise(
+						Effect.gen(function* () {
+							// Save the proposal to the database
+							yield* conversationRepo.saveProposal(issueId, proposalText).pipe(
+								Effect.catchAll(() => Effect.void),
+							);
+							// Update issue state
+							yield* issueRepo.updateState(
+								issueId,
+								IssueState.PendingApproval({
+									sessionId: sessionHandle.sessionId,
+									proposal: proposalText,
+								}),
+							);
+						}).pipe(Effect.catchAll(() => Effect.void)),
+					).then(() => resume(Effect.void));
+				}
+			});
+
+			// Send the prompt
+			sessionHandle.prompt(prompt).pipe(
+				Effect.tapError((error) =>
+					Effect.gen(function* () {
+						unsubscribe();
+						// On error, update issue state to Error
+						yield* issueRepo.updateState(
+							issueId,
+							IssueState.Error({
+								previousState: "analyzing",
+								sessionId: sessionHandle.sessionId,
+								error: error.message,
+							}),
+						).pipe(Effect.catchAll(() => Effect.void));
+					}),
+				),
+				Effect.catchAll(() => Effect.void),
+				Effect.runPromise,
+			);
+		}),
 	);
 
 	return yield* HttpServerResponse.json({

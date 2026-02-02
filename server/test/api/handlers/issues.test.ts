@@ -8,7 +8,7 @@ import { BunContext } from "@effect/platform-bun";
 import { describe, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import { expect } from "vitest";
-import { DatabaseTestLive, SentryIssueRepository } from "../../../src/db/index.js";
+import { DatabaseTestLive, SentryIssueRepository, ConversationRepository } from "../../../src/db/index.js";
 import { IssueSource } from "../../../src/domain/issue.js";
 import {
 	SentryService,
@@ -107,7 +107,20 @@ const createMockRequest = (path: string) =>
 		method: "POST",
 		headers: new Headers(),
 		remoteAddress: Option.none(),
-	} as HttpServerRequest.HttpServerRequest);
+		// Stub remaining required properties
+		source: null as unknown,
+		originalUrl: `http://localhost${path}`,
+		cookies: Effect.succeed({}),
+		multipart: Effect.die("not implemented"),
+		upgrade: Effect.die("not implemented"),
+		modify: () => null as unknown,
+		arrayBuffer: Effect.die("not implemented"),
+		formData: Effect.die("not implemented"),
+		json: Effect.die("not implemented"),
+		stream: null as unknown,
+		text: Effect.die("not implemented"),
+		urlParamsBody: Effect.die("not implemented"),
+	} as unknown as HttpServerRequest.HttpServerRequest);
 
 // =============================================================================
 // Test Layer Helpers
