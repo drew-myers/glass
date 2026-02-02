@@ -152,6 +152,7 @@ export const listIssuesHandler = Effect.gen(function* () {
  */
 export const getIssueHandler = Effect.gen(function* () {
 	const issueRepo = yield* SentryIssueRepository;
+	const conversationRepo = yield* ConversationRepository;
 	const request = yield* HttpServerRequest.HttpServerRequest;
 	
 	// Extract ID from path params
@@ -195,6 +196,24 @@ export const getIssueHandler = Effect.gen(function* () {
 			},
 			{ status: 404 },
 		);
+	}
+
+	// If in PendingApproval state, load the proposal from the database
+	// (the proposal is stored separately in the proposals table)
+	if (issue.state._tag === "PendingApproval") {
+		const maybeProposal = yield* conversationRepo.getProposal(issue.id).pipe(
+			Effect.catchAll(() => Effect.succeed(Option.none())),
+		);
+		if (Option.isSome(maybeProposal)) {
+			// Create a new issue object with the proposal filled in
+			issue = {
+				...issue,
+				state: IssueState.PendingApproval({
+					sessionId: issue.state.sessionId,
+					proposal: maybeProposal.value.content,
+				}),
+			};
+		}
 	}
 	
 	return yield* HttpServerResponse.json(mapIssueToDetail(issue));
