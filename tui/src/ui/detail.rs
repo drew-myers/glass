@@ -120,6 +120,151 @@ fn draw_content(f: &mut Frame, issue: &IssueDetail, scroll: usize, area: Rect) {
 
     lines.push(Line::default());
 
+    // Request section
+    if let Some(request) = &issue.source.request {
+        lines.push(Line::from(Span::styled(
+            "── Request ──",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::default());
+
+        lines.push(Line::from(vec![
+            Span::styled(&request.method, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+            Span::raw(&request.url),
+        ]));
+
+        if let Some(query) = &request.query {
+            if !query.is_empty() {
+                for (key, value) in query {
+                    lines.push(Line::from(vec![
+                        Span::styled("  ?", Style::default().fg(Color::DarkGray)),
+                        Span::raw(format!("{}={}", key, truncate_str(value, 50))),
+                    ]));
+                }
+            }
+        }
+
+        if let Some(data) = &request.data {
+            lines.push(Line::from(vec![
+                Span::styled("  Body: ", Style::default().fg(Color::DarkGray)),
+                Span::raw(truncate_str(&format!("{}", data), 60)),
+            ]));
+        }
+
+        lines.push(Line::default());
+    }
+
+    // User section
+    if let Some(user) = &issue.source.user {
+        lines.push(Line::from(Span::styled(
+            "── User ──",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::default());
+
+        let mut user_parts: Vec<Span> = Vec::new();
+        if let Some(email) = &user.email {
+            user_parts.push(Span::raw(email.clone()));
+        } else if let Some(id) = &user.id {
+            user_parts.push(Span::styled("ID: ", Style::default().fg(Color::DarkGray)));
+            user_parts.push(Span::raw(truncate_str(id, 30)));
+        }
+        if let Some(ip) = &user.ip_address {
+            if !user_parts.is_empty() {
+                user_parts.push(Span::raw(" │ "));
+            }
+            user_parts.push(Span::styled("IP: ", Style::default().fg(Color::DarkGray)));
+            user_parts.push(Span::raw(ip.clone()));
+        }
+        if let Some(geo) = &user.geo {
+            if !user_parts.is_empty() {
+                user_parts.push(Span::raw(" │ "));
+            }
+            let location = [
+                geo.city.as_deref(),
+                geo.region.as_deref(),
+                geo.country_code.as_deref(),
+            ]
+            .iter()
+            .filter_map(|&s| s)
+            .collect::<Vec<_>>()
+            .join(", ");
+            if !location.is_empty() {
+                user_parts.push(Span::raw(location));
+            }
+        }
+        if !user_parts.is_empty() {
+            lines.push(Line::from(user_parts));
+        }
+
+        lines.push(Line::default());
+    }
+
+    // Context section (browser, device, runtime)
+    if let Some(contexts) = &issue.source.contexts {
+        lines.push(Line::from(Span::styled(
+            "── Context ──",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::default());
+
+        let mut ctx_parts: Vec<String> = Vec::new();
+
+        if let Some(browser) = &contexts.browser {
+            let browser_str = match (&browser.name, &browser.version) {
+                (Some(n), Some(v)) => format!("{} {}", n, v),
+                (Some(n), None) => n.clone(),
+                _ => String::new(),
+            };
+            if !browser_str.is_empty() {
+                ctx_parts.push(browser_str);
+            }
+        }
+
+        if let Some(os) = &contexts.os {
+            let os_str = match (&os.name, &os.version) {
+                (Some(n), Some(v)) => format!("{} {}", n, v),
+                (Some(n), None) => n.clone(),
+                _ => String::new(),
+            };
+            if !os_str.is_empty() {
+                ctx_parts.push(os_str);
+            }
+        }
+
+        if let Some(device) = &contexts.device {
+            let device_str = [
+                device.brand.as_deref(),
+                device.model.as_deref(),
+            ]
+            .iter()
+            .filter_map(|&s| s)
+            .collect::<Vec<_>>()
+            .join(" ");
+            if !device_str.is_empty() {
+                ctx_parts.push(device_str);
+            }
+        }
+
+        if let Some(runtime) = &contexts.runtime {
+            let runtime_str = match (&runtime.name, &runtime.version) {
+                (Some(n), Some(v)) => format!("{} {}", n, v),
+                (Some(n), None) => n.clone(),
+                _ => String::new(),
+            };
+            if !runtime_str.is_empty() {
+                ctx_parts.push(runtime_str);
+            }
+        }
+
+        if !ctx_parts.is_empty() {
+            lines.push(Line::from(ctx_parts.join(" │ ")));
+        }
+
+        lines.push(Line::default());
+    }
+
     // Exception/stacktrace section
     if let Some(exceptions) = &issue.source.exceptions {
         lines.push(Line::from(Span::styled(
@@ -171,24 +316,39 @@ fn draw_content(f: &mut Frame, issue: &IssueDetail, scroll: usize, area: Rect) {
             let start = breadcrumbs.len().saturating_sub(max_crumbs);
             for crumb in &breadcrumbs[start..] {
                 let category = crumb.category.as_deref().unwrap_or("?");
-                let message = crumb.message.as_deref().unwrap_or("");
                 let timestamp = crumb.timestamp.as_deref()
                     .and_then(|ts| ts.split('T').last())
                     .and_then(|t| t.split('.').next())
                     .unwrap_or("");
 
                 let color = match category {
-                    "http" | "fetch" => Color::Blue,
+                    "http" | "fetch" | "httplib" => Color::Blue,
                     "console" => Color::Yellow,
                     "navigation" | "ui.click" => Color::Magenta,
                     "error" | "exception" => Color::Red,
+                    "query" => Color::Cyan,
+                    "redis" => Color::Green,
                     _ => Color::DarkGray,
+                };
+
+                // Build message - prefer data fields for http, fall back to message
+                let display_msg = if let Some(data) = &crumb.data {
+                    if category == "httplib" || category == "http" {
+                        let method = data.http_method.as_deref().unwrap_or("");
+                        let url = data.url.as_deref().unwrap_or("");
+                        let status = data.status_code.map(|s| format!(" → {}", s)).unwrap_or_default();
+                        format!("{} {}{}", method, truncate_str(url, 40), status)
+                    } else {
+                        crumb.message.as_deref().unwrap_or("").to_string()
+                    }
+                } else {
+                    crumb.message.as_deref().unwrap_or("").to_string()
                 };
 
                 lines.push(Line::from(vec![
                     Span::styled(format!("{:>8} ", timestamp), Style::default().fg(Color::DarkGray)),
                     Span::styled(format!("{:<12} ", category), Style::default().fg(color)),
-                    Span::raw(truncate_str(message, 60)),
+                    Span::raw(truncate_str(&display_msg, 55)),
                 ]));
             }
             lines.push(Line::default());

@@ -63,6 +63,74 @@ pub struct IssueSource {
     pub environment: Option<String>,
     pub release: Option<String>,
     pub tags: Option<HashMap<String, String>>,
+    pub request: Option<RequestInfo>,
+    pub user: Option<UserInfo>,
+    pub contexts: Option<ContextInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestInfo {
+    pub method: String,
+    pub url: String,
+    pub query: Option<Vec<(String, String)>>,
+    pub data: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserInfo {
+    pub id: Option<String>,
+    pub email: Option<String>,
+    pub ip_address: Option<String>,
+    pub username: Option<String>,
+    pub geo: Option<GeoInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoInfo {
+    pub country_code: Option<String>,
+    pub city: Option<String>,
+    pub region: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextInfo {
+    pub browser: Option<BrowserContext>,
+    pub os: Option<OsContext>,
+    pub device: Option<DeviceContext>,
+    pub runtime: Option<RuntimeContext>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserContext {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OsContext {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceContext {
+    pub family: Option<String>,
+    pub model: Option<String>,
+    pub brand: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeContext {
+    pub name: Option<String>,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -117,6 +185,18 @@ pub struct Breadcrumb {
     pub category: Option<String>,
     pub message: Option<String>,
     pub timestamp: Option<String>,
+    pub data: Option<BreadcrumbData>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreadcrumbData {
+    pub url: Option<String>,
+    #[serde(rename = "http.response.status_code")]
+    pub status_code: Option<i32>,
+    #[serde(rename = "http.method")]
+    pub http_method: Option<String>,
+    pub reason: Option<String>,
 }
 
 // =============================================================================

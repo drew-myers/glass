@@ -89,6 +89,69 @@ export interface Breadcrumb {
 }
 
 /**
+ * HTTP request information from the event.
+ */
+export interface RequestInfo {
+	/** HTTP method (GET, POST, etc.) */
+	readonly method: string;
+	/** Request URL */
+	readonly url: string;
+	/** Query string parameters */
+	readonly query?: readonly (readonly [string, string])[];
+	/** Request body data (may be truncated) */
+	readonly data?: unknown;
+	/** Request headers (sensitive values filtered) */
+	readonly headers?: readonly (readonly [string, string])[];
+}
+
+/**
+ * User information from the event.
+ */
+export interface UserInfo {
+	/** User ID */
+	readonly id?: string;
+	/** User email */
+	readonly email?: string;
+	/** IP address */
+	readonly ipAddress?: string;
+	/** Username */
+	readonly username?: string;
+	/** Geographic location */
+	readonly geo?: {
+		readonly countryCode?: string;
+		readonly city?: string;
+		readonly region?: string;
+	};
+}
+
+/**
+ * Context information about the runtime environment.
+ */
+export interface ContextInfo {
+	/** Browser info */
+	readonly browser?: {
+		readonly name?: string;
+		readonly version?: string;
+	};
+	/** Operating system info */
+	readonly os?: {
+		readonly name?: string;
+		readonly version?: string;
+	};
+	/** Device info */
+	readonly device?: {
+		readonly family?: string;
+		readonly model?: string;
+		readonly brand?: string;
+	};
+	/** Runtime info (e.g., Python, Node.js) */
+	readonly runtime?: {
+		readonly name?: string;
+		readonly version?: string;
+	};
+}
+
+/**
  * Exception mechanism info (how the exception was captured).
  */
 export interface ExceptionMechanism {
@@ -138,6 +201,12 @@ export interface SentrySourceData extends IssueSourceCommon {
 	readonly release?: string;
 	/** Event tags as key-value pairs */
 	readonly tags?: Readonly<Record<string, string>>;
+	/** HTTP request that triggered the error */
+	readonly request?: RequestInfo;
+	/** User who triggered the error */
+	readonly user?: UserInfo;
+	/** Runtime context (browser, device, etc.) */
+	readonly contexts?: ContextInfo;
 }
 
 /**

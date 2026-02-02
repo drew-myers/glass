@@ -20,11 +20,14 @@ import { Context, Effect, Layer, Redacted, Schema } from "effect";
 import { Config, getSentryConfig } from "../../config/index.js";
 import type {
 	Breadcrumb,
+	ContextInfo,
 	ExceptionValue,
 	IssueSource,
+	RequestInfo,
 	SentrySourceData,
 	StackFrame,
 	Stacktrace,
+	UserInfo,
 } from "../../domain/issue.js";
 import { IssueSource as IssueSourceEnum } from "../../domain/issue.js";
 import { SentryError } from "./errors.js";
@@ -100,6 +103,12 @@ export interface SentryEventData {
 	readonly release: string | undefined;
 	/** Event tags */
 	readonly tags: Readonly<Record<string, string>>;
+	/** HTTP request info (optional) */
+	readonly request: RequestInfo | undefined;
+	/** User info (optional) */
+	readonly user: UserInfo | undefined;
+	/** Runtime contexts (optional) */
+	readonly contexts: ContextInfo | undefined;
 }
 
 /**
@@ -331,6 +340,150 @@ const extractTags = (tags: readonly { key: string; value: string }[]): Record<st
 };
 
 /**
+ * Extract request info from event entries.
+ */
+const extractRequest = (entries: readonly GenericEntry[]): RequestInfo | undefined => {
+	for (const entry of entries) {
+		if (entry.type === "request" && typeof entry.data === "object" && entry.data !== null) {
+			const data = entry.data as {
+				method?: string;
+				url?: string;
+				query?: [string, string][];
+				data?: unknown;
+				headers?: [string, string][];
+			};
+
+			if (!data.method && !data.url) {
+				return undefined;
+			}
+
+			const request: RequestInfo = {
+				method: data.method ?? "UNKNOWN",
+				url: data.url ?? "",
+			};
+
+			if (data.query && data.query.length > 0) {
+				return { ...request, query: data.query };
+			}
+			if (data.data) {
+				return { ...request, data: data.data };
+			}
+			if (data.headers && data.headers.length > 0) {
+				// Filter out sensitive headers
+				const safeHeaders = data.headers.filter(
+					([key]) => !["cookie", "authorization", "x-csrftoken"].includes(key.toLowerCase()),
+				);
+				if (safeHeaders.length > 0) {
+					return { ...request, headers: safeHeaders };
+				}
+			}
+
+			return request;
+		}
+	}
+	return undefined;
+};
+
+/**
+ * Extract user info from event.
+ */
+const extractUser = (user: unknown): UserInfo | undefined => {
+	if (!user || typeof user !== "object") {
+		return undefined;
+	}
+
+	const u = user as {
+		id?: string;
+		email?: string;
+		ip_address?: string;
+		username?: string;
+		geo?: {
+			country_code?: string;
+			city?: string;
+			region?: string;
+		};
+	};
+
+	if (!u.id && !u.email && !u.ip_address) {
+		return undefined;
+	}
+
+	const userInfo: UserInfo = {};
+
+	if (u.id) {
+		(userInfo as { id: string }).id = u.id;
+	}
+	if (u.email) {
+		(userInfo as { email: string }).email = u.email;
+	}
+	if (u.ip_address) {
+		(userInfo as { ipAddress: string }).ipAddress = u.ip_address;
+	}
+	if (u.username) {
+		(userInfo as { username: string }).username = u.username;
+	}
+	if (u.geo) {
+		const geo: { countryCode?: string; city?: string; region?: string } = {};
+		if (u.geo.country_code) geo.countryCode = u.geo.country_code;
+		if (u.geo.city) geo.city = u.geo.city;
+		if (u.geo.region) geo.region = u.geo.region;
+		if (Object.keys(geo).length > 0) {
+			(userInfo as { geo: UserInfo["geo"] }).geo = geo;
+		}
+	}
+
+	return userInfo;
+};
+
+/**
+ * Extract context info from event contexts.
+ */
+const extractContexts = (contexts: unknown): ContextInfo | undefined => {
+	if (!contexts || typeof contexts !== "object") {
+		return undefined;
+	}
+
+	const ctx = contexts as {
+		browser?: { name?: string; version?: string };
+		client_os?: { name?: string; version?: string };
+		device?: { family?: string; model?: string; brand?: string };
+		runtime?: { name?: string; version?: string };
+	};
+
+	const contextInfo: ContextInfo = {};
+	let hasData = false;
+
+	if (ctx.browser?.name) {
+		const browser: { name?: string; version?: string } = { name: ctx.browser.name };
+		if (ctx.browser.version) browser.version = ctx.browser.version;
+		(contextInfo as { browser: ContextInfo["browser"] }).browser = browser;
+		hasData = true;
+	}
+	if (ctx.client_os?.name) {
+		const os: { name?: string; version?: string } = { name: ctx.client_os.name };
+		if (ctx.client_os.version) os.version = ctx.client_os.version;
+		(contextInfo as { os: ContextInfo["os"] }).os = os;
+		hasData = true;
+	}
+	if (ctx.device?.family || ctx.device?.model) {
+		const device: { family?: string; model?: string; brand?: string } = {};
+		if (ctx.device.family) device.family = ctx.device.family;
+		if (ctx.device.model) device.model = ctx.device.model;
+		if (ctx.device.brand) device.brand = ctx.device.brand;
+		(contextInfo as { device: ContextInfo["device"] }).device = device;
+		hasData = true;
+	}
+	if (ctx.runtime?.name) {
+		const runtime: { name?: string; version?: string } = { name: ctx.runtime.name };
+		if (ctx.runtime.version) runtime.version = ctx.runtime.version;
+		(contextInfo as { runtime: ContextInfo["runtime"] }).runtime = runtime;
+		hasData = true;
+	}
+
+	return hasData ? contextInfo : undefined;
+};
+
+/**
  * Build metadata object, only including defined properties.
  */
 const buildMetadata = (issue: {
@@ -552,6 +705,9 @@ const make = Effect.gen(function* () {
 				environment: extractEnvironment(event.tags),
 				release,
 				tags: extractTags(event.tags),
+				request: extractRequest(event.entries),
+				user: extractUser(event.user),
+				contexts: extractContexts(event.contexts),
 			};
 
 			return eventData;

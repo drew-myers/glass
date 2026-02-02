@@ -98,6 +98,9 @@ const mapIssueToDetail = (issue: Issue) => {
 			environment: data.environment,
 			release: data.release,
 			tags: data.tags,
+			request: data.request,
+			user: data.user,
+			contexts: data.contexts,
 		};
 	}
 	
@@ -344,6 +347,9 @@ export const refreshIssueHandler = Effect.gen(function* () {
 		...(eventData.environment && { environment: eventData.environment }),
 		...(eventData.release && { release: eventData.release }),
 		...(eventData.tags && { tags: eventData.tags }),
+		...(eventData.request && { request: eventData.request }),
+		...(eventData.user && { user: eventData.user }),
+		...(eventData.contexts && { contexts: eventData.contexts }),
 	};
 
 	// Upsert the updated issue
