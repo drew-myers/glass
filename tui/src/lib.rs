@@ -5,5 +5,6 @@
 pub mod api;
 pub mod app;
 pub mod escape;
+pub mod logging;
 pub mod server;
 pub mod ui;

@@ -18,6 +18,8 @@ import {
 import {
 	AgentService,
 	type AgentServiceInterface,
+	EventBufferService,
+	EventBufferServiceLive,
 } from "../../../src/services/agent/index.js";
 import { AgentError } from "../../../src/services/agent/errors.js";
 import type { AgentSessionHandle } from "../../../src/services/agent/types.js";
@@ -136,6 +138,7 @@ const createAnalyzeTestLayer = (agentImpl: AgentServiceInterface) =>
 	Layer.mergeAll(
 		DatabaseTestLive.pipe(Layer.provide(BunContext.layer)),
 		Layer.succeed(AgentService, agentImpl),
+		EventBufferServiceLive,
 	);
 
 // =============================================================================

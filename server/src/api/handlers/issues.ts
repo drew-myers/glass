@@ -7,7 +7,7 @@ import { Effect, Option } from "effect";
 import { ConversationRepository, SentryIssueRepository } from "../../db/index.js";
 import type { Issue } from "../../domain/issue.js";
 import { IssueState } from "../../domain/issue.js";
-import { AgentService } from "../../services/agent/index.js";
+import { AgentService, EventBufferService, type AnalysisEvent } from "../../services/agent/index.js";
 import { buildAnalysisPrompt } from "../../services/prompts/index.js";
 import { SentryService } from "../../services/sentry/index.js";
 
@@ -447,6 +447,7 @@ export const refreshIssueHandler = Effect.gen(function* () {
  */
 export const analyzeIssueHandler = Effect.gen(function* () {
 	const agentService = yield* AgentService;
+	const eventBuffer = yield* EventBufferService;
 	const issueRepo = yield* SentryIssueRepository;
 	const conversationRepo = yield* ConversationRepository;
 	const request = yield* HttpServerRequest.HttpServerRequest;
@@ -495,13 +496,14 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 		);
 	}
 
-	// Validate state - only allow analysis from Pending or Error states
-	if (issue.state._tag !== "Pending" && issue.state._tag !== "Error") {
+	// Allow analysis from: Pending, Error, Analyzing (restart), PendingApproval (re-analyze)
+	const allowedStates = ["Pending", "Error", "Analyzing", "PendingApproval"];
+	if (!allowedStates.includes(issue.state._tag)) {
 		return yield* HttpServerResponse.json(
 			{
 				error: {
 					code: "INVALID_STATE",
-					message: `Cannot analyze issue in '${issue.state._tag}' state. Must be 'Pending' or 'Error'.`,
+					message: `Cannot analyze issue in '${issue.state._tag}' state. Allowed: ${allowedStates.join(", ")}.`,
 				},
 			},
 			{ status: 409 },
@@ -516,6 +518,9 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 		})),
 	);
 
+	// Create event buffer for this session (keyed by issue ID for client access)
+	yield* eventBuffer.createBuffer(issue.id);
+
 	// Update issue state to Analyzing
 	yield* issueRepo.updateState(issue.id, IssueState.Analyzing({ sessionId: sessionHandle.sessionId })).pipe(
 		Effect.mapError((error) => ({
@@ -527,42 +532,92 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 	// Build the analysis prompt
 	const prompt = buildAnalysisPrompt(issue);
 
-	// Capture the issue ID for the background task (issue variable may be reassigned)
+	// Capture variables for the background task
 	const issueId = issue.id;
 
+	// Helper to append event to buffer
+	const appendEvent = (event: AnalysisEvent) => {
+		Effect.runSync(eventBuffer.appendEvent(issueId, event));
+	};
+
 	// Start analysis in background
-	// Subscribe to events to capture the proposal when agent completes
+	// Subscribe to events to capture the proposal and stream to clients
 	Effect.runFork(
 		Effect.async<void, never>((resume) => {
 			let proposalText = "";
+			let isThinking = false;
 
 			// Subscribe to agent events
 			const unsubscribe = sessionHandle.subscribe((event) => {
-				if (event.type === "message_update") {
-					// Accumulate text from assistant messages
-					const assistantEvent = event.assistantMessageEvent;
-					if (assistantEvent.type === "text_delta") {
-						proposalText += assistantEvent.delta;
+				switch (event.type) {
+					case "message_update": {
+						const assistantEvent = event.assistantMessageEvent;
+						if (assistantEvent.type === "text_delta") {
+							proposalText += assistantEvent.delta;
+							appendEvent({ type: "text_delta", delta: assistantEvent.delta });
+						} else if (assistantEvent.type === "thinking_delta") {
+							// Signal thinking state (only send once per thinking block)
+							if (!isThinking) {
+								isThinking = true;
+								appendEvent({ type: "thinking" });
+							}
+						}
+						break;
 					}
-				} else if (event.type === "agent_end") {
-					// Agent finished - save proposal and update state to PendingApproval
-					unsubscribe();
-					Effect.runPromise(
-						Effect.gen(function* () {
-							// Save the proposal to the database
-							yield* conversationRepo.saveProposal(issueId, proposalText).pipe(
-								Effect.catchAll(() => Effect.void),
-							);
-							// Update issue state
-							yield* issueRepo.updateState(
-								issueId,
-								IssueState.PendingApproval({
-									sessionId: sessionHandle.sessionId,
-									proposal: proposalText,
-								}),
-							);
-						}).pipe(Effect.catchAll(() => Effect.void)),
-					).then(() => resume(Effect.void));
+
+					case "message_end":
+						// Reset thinking state for next message
+						isThinking = false;
+						break;
+
+					case "tool_execution_start":
+						appendEvent({
+							type: "tool_start",
+							tool: event.toolName,
+							args: event.args as Record<string, unknown>,
+						});
+						break;
+
+					case "tool_execution_update":
+						// Stream tool output (partialResult contains streaming output)
+						if (event.partialResult) {
+							const output = typeof event.partialResult === "string"
+								? event.partialResult
+								: JSON.stringify(event.partialResult);
+							appendEvent({ type: "tool_output", output });
+						}
+						break;
+
+					case "tool_execution_end":
+						appendEvent({
+							type: "tool_end",
+							tool: event.toolName,
+							isError: event.isError,
+						});
+						break;
+
+					case "agent_end":
+						// Agent finished - save proposal and update state
+						unsubscribe();
+						Effect.runPromise(
+							Effect.gen(function* () {
+								// Save the proposal to the database
+								yield* conversationRepo.saveProposal(issueId, proposalText).pipe(
+									Effect.catchAll(() => Effect.void),
+								);
+								// Update issue state
+								yield* issueRepo.updateState(
+									issueId,
+									IssueState.PendingApproval({
+										sessionId: sessionHandle.sessionId,
+										proposal: proposalText,
+									}),
+								);
+								// Send completion event with proposal
+								appendEvent({ type: "complete", proposal: proposalText });
+							}).pipe(Effect.catchAll(() => Effect.void)),
+						).then(() => resume(Effect.void));
+						break;
 				}
 			});
 
@@ -571,7 +626,9 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 				Effect.tapError((error) =>
 					Effect.gen(function* () {
 						unsubscribe();
-						// On error, update issue state to Error
+						// Send error event
+						appendEvent({ type: "error", message: error.message });
+						// Update issue state to Error
 						yield* issueRepo.updateState(
 							issueId,
 							IssueState.Error({
@@ -616,3 +673,136 @@ export const analyzeIssueHandler = Effect.gen(function* () {
 		),
 	),
 );
+
+/**
+ * GET /api/v1/issues/:id/events
+ *
+ * Server-Sent Events endpoint for streaming analysis progress.
+ * First message is a backfill of all events so far, then live events follow.
+ *
+ * Returns 404 if no active analysis session exists for this issue.
+ */
+export const eventsHandler = Effect.gen(function* () {
+	const eventBuffer = yield* EventBufferService;
+	const request = yield* HttpServerRequest.HttpServerRequest;
+
+	// Extract ID from path params (format: /api/v1/issues/:id/events)
+	const url = new URL(request.url, "http://localhost");
+	const pathParts = url.pathname.split("/");
+	const id = pathParts[pathParts.length - 2]; // Second to last segment
+
+	if (!id) {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "VALIDATION_ERROR",
+					message: "Issue ID is required",
+				},
+			},
+			{ status: 400 },
+		);
+	}
+
+	// Try to subscribe to the event buffer
+	// Need to handle both direct ID and sentry: prefixed ID
+	let subscription = yield* eventBuffer.subscribe(id, () => {});
+	if (!subscription) {
+		subscription = yield* eventBuffer.subscribe(`sentry:${id}`, () => {});
+	}
+
+	if (!subscription) {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "NOT_FOUND",
+					message: `No active analysis session for issue: ${id}`,
+				},
+			},
+			{ status: 404 },
+		);
+	}
+
+	// Unsubscribe from the test subscription
+	subscription.unsubscribe();
+
+	// Create SSE stream
+	const issueId = id.startsWith("sentry:") ? id : `sentry:${id}`;
+	const stream = new ReadableStream({
+		start: async (controller) => {
+			const encoder = new TextEncoder();
+			let unsubscribeFn: (() => void) | null = null;
+
+			const sendEvent = (data: unknown) => {
+				const json = JSON.stringify(data);
+				controller.enqueue(encoder.encode(`data: ${json}\n\n`));
+			};
+
+			const closeStream = () => {
+				if (unsubscribeFn) {
+					unsubscribeFn();
+					unsubscribeFn = null;
+				}
+				controller.close();
+			};
+
+			// Subscribe and get backfill
+			const result = await Effect.runPromise(
+				eventBuffer.subscribe(issueId, (event) => {
+					sendEvent(event);
+					// Close stream on terminal events
+					if (event.type === "complete" || event.type === "error") {
+						closeStream();
+					}
+				}).pipe(
+					Effect.catchAll(() => Effect.succeed(null)),
+				),
+			);
+
+			// Also try without prefix if not found
+			const finalResult = result ?? await Effect.runPromise(
+				eventBuffer.subscribe(id, (event) => {
+					sendEvent(event);
+					// Close stream on terminal events
+					if (event.type === "complete" || event.type === "error") {
+						closeStream();
+					}
+				}).pipe(
+					Effect.catchAll(() => Effect.succeed(null)),
+				),
+			);
+
+			if (!finalResult) {
+				// Session ended between check and subscribe
+				sendEvent({ type: "error", message: "Session ended" });
+				controller.close();
+				return;
+			}
+
+			unsubscribeFn = finalResult.unsubscribe;
+
+			// Send backfill as first message
+			sendEvent({ type: "backfill", events: finalResult.backfill });
+
+			// Check if already completed (backfill contains complete or error)
+			const isCompleted = finalResult.backfill.some(
+				(e) => e.type === "complete" || e.type === "error",
+			);
+
+			if (isCompleted) {
+				closeStream();
+			}
+
+			// Live events will be sent via the subscription callback
+			// The stream stays open until the client disconnects or we get complete/error
+		},
+	});
+
+	return yield* HttpServerResponse.raw(stream, {
+		status: 200,
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+			Connection: "keep-alive",
+		},
+	});
+});

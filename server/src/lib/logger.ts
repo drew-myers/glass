@@ -1,11 +1,11 @@
 /**
- * @fileoverview File-based logging for Glass.
+ * @fileoverview File-based logging for Glass server.
  *
  * Provides a custom Effect logger that writes to a log file in the
- * project-specific data directory. Logs are written in a human-readable
+ * XDG state directory. Logs are written in a human-readable
  * format with timestamps, levels, and structured data.
  *
- * Log location: ~/.local/share/glass/<project-hash>/logs/glass.log
+ * Log location: ~/.local/state/glass/server.log
  */
 
 import * as Fs from "node:fs";
@@ -61,17 +61,16 @@ const formatSpans = (spans: List.List<LogSpan.LogSpan>): string => {
 };
 
 /**
- * Creates a file logger for the given project path.
+ * Creates a file logger for the server.
  *
  * The logger writes formatted log entries to the log file, creating
  * the logs directory if it doesn't exist.
  *
- * @param projectPath - Absolute path to the project
- * @returns A Logger that writes to the project's log file
+ * @returns A Logger that writes to the server log file
  */
-export const createFileLogger = (projectPath: string): Logger.Logger<unknown, void> => {
-	const logsDir = getLogsDirectory(projectPath);
-	const logPath = getLogFilePath(projectPath);
+export const createFileLogger = (): Logger.Logger<unknown, void> => {
+	const logsDir = getLogsDirectory();
+	const logPath = getLogFilePath();
 
 	// Ensure logs directory exists
 	Fs.mkdirSync(logsDir, { recursive: true });
@@ -98,18 +97,17 @@ export const createFileLogger = (projectPath: string): Logger.Logger<unknown, vo
 };
 
 /**
- * Creates a Layer that configures file-based logging for a project.
+ * Creates a Layer that configures file-based logging for the server.
  *
  * This layer:
  * - Creates the logs directory if needed
- * - Sets up a file logger that writes to glass.log
+ * - Sets up a file logger that writes to server.log
  * - Sets the minimum log level to Debug for comprehensive logging
  *
- * @param projectPath - Absolute path to the project
  * @returns Layer that provides file-based logging
  */
-export const FileLoggerLive = (projectPath: string): Layer.Layer<never> => {
-	const fileLogger = createFileLogger(projectPath);
+export const FileLoggerLive = (): Layer.Layer<never> => {
+	const fileLogger = createFileLogger();
 
 	return Layer.merge(
 		// Replace the default logger with our file logger
@@ -124,15 +122,13 @@ export const FileLoggerLive = (projectPath: string): Layer.Layer<never> => {
  *
  * Useful for debugging when you want logs in file plus some other output.
  *
- * @param projectPath - Absolute path to the project
  * @param additionalLogger - Additional logger to combine with file logger
  * @returns Layer that provides combined logging
  */
 export const combinedLoggerLive = (
-	projectPath: string,
 	additionalLogger: Logger.Logger<unknown, void>,
 ): Layer.Layer<never> => {
-	const fileLogger = createFileLogger(projectPath);
+	const fileLogger = createFileLogger();
 	const combined = Logger.zip(fileLogger, additionalLogger);
 
 	return Layer.merge(

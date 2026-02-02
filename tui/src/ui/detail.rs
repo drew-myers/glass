@@ -23,22 +23,25 @@ pub fn draw_detail(f: &mut Frame, app: &App, area: Rect) {
         .split(area);
 
     draw_header(f, app, chunks[0]);
+    draw_content_area(f, app, chunks[1]);
+}
 
+/// Draw the main content area (issue detail or loading state).
+fn draw_content_area(f: &mut Frame, app: &App, area: Rect) {
     if let Some(issue) = &app.current_issue {
-        draw_content(f, issue, app.detail_scroll, chunks[1]);
+        draw_content(f, issue, app.detail_scroll, area);
     } else if app.is_loading {
         let loading = Paragraph::new("Loading...")
             .style(Style::default().fg(Color::DarkGray))
             .block(Block::default().borders(Borders::ALL));
-        f.render_widget(loading, chunks[1]);
+        f.render_widget(loading, area);
     } else {
         let empty = Paragraph::new("No issue selected")
             .style(Style::default().fg(Color::DarkGray))
             .block(Block::default().borders(Borders::ALL));
-        f.render_widget(empty, chunks[1]);
+        f.render_widget(empty, area);
     }
 }
-
 /// Draw the header with issue title and status.
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let (title, status) = if let Some(issue) = &app.current_issue {
@@ -378,37 +381,6 @@ fn draw_content(f: &mut Frame, issue: &IssueDetail, scroll: usize, area: Rect) {
             }
             lines.push(Line::from(tag_spans));
             lines.push(Line::default());
-        }
-    }
-
-    // Proposal section (if in pending_approval state)
-    if let IssueState::PendingApproval { proposal, .. } = &issue.state {
-        lines.push(Line::from(Span::styled(
-            "── Proposal ──",
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-        )));
-        lines.push(Line::default());
-
-        // Simple markdown-ish rendering
-        for line in proposal.lines() {
-            let styled_line = if line.starts_with("## ") {
-                Line::from(Span::styled(
-                    &line[3..],
-                    Style::default().add_modifier(Modifier::BOLD),
-                ))
-            } else if line.starts_with("```") {
-                Line::from(Span::styled(line, Style::default().fg(Color::DarkGray)))
-            } else if line.starts_with("- ") || line.starts_with("+ ") {
-                let color = if line.starts_with("+") {
-                    Color::Green
-                } else {
-                    Color::Red
-                };
-                Line::from(Span::styled(line, Style::default().fg(color)))
-            } else {
-                Line::from(line)
-            };
-            lines.push(styled_line);
         }
     }
 

@@ -11,7 +11,7 @@ import { ConfigLive } from "./config/index.js";
 import { DatabaseLive } from "./db/index.js";
 import { FileLoggerLive } from "./lib/logger.js";
 import { ProjectPath } from "./lib/project.js";
-import { AgentServiceLive } from "./services/agent/index.js";
+import { AgentServiceLive, EventBufferServiceLive } from "./services/agent/index.js";
 import { SentryServiceLive } from "./services/sentry/index.js";
 import { ApiLive } from "./api/routes.js";
 
@@ -43,8 +43,8 @@ const createAppLayer = () => {
 	// Project path layer
 	const ProjectPathLive = Layer.succeed(ProjectPath, projectPath);
 
-	// Logger layer
-	const LoggerLayer = FileLoggerLive(projectPath);
+	// Logger layer (logs to ~/.local/state/glass/server.log)
+	const LoggerLayer = FileLoggerLive();
 
 	// Config layer
 	const ConfigLayer = ConfigLive().pipe(Layer.provide(BunContext.layer));
@@ -66,16 +66,21 @@ const createAppLayer = () => {
 		Layer.provide(ConfigLayer),
 	);
 
+	// Event buffer service (for SSE streaming)
+	const EventBufferLayer = EventBufferServiceLive;
+
 	// HTTP Server
 	const ServerLayer = BunHttpServer.layer({ port: PORT });
 
 	// Combine all layers
 	return Layer.mergeAll(
+		ProjectPathLive,
 		LoggerLayer,
 		ConfigLayer,
 		DbLayer,
 		SentryLayer,
 		AgentLayer,
+		EventBufferLayer,
 		ServerLayer,
 	);
 };
@@ -85,7 +90,9 @@ const createAppLayer = () => {
 // =============================================================================
 
 const program = Effect.gen(function* () {
+	const projectPath = yield* ProjectPath;
 	yield* Effect.logInfo(`Glass server starting on http://localhost:${PORT}`);
+	yield* Effect.logInfo(`Project path: ${projectPath}`);
 	
 	// Keep the server running
 	yield* Effect.never;

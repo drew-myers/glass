@@ -265,7 +265,8 @@ pub struct SessionRef {
 pub struct AnalyzeResponse {
     pub status: String,
     pub session_id: String,
-    pub session_path: String,
+    #[serde(default)]
+    pub session_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -303,4 +304,43 @@ pub struct CleanedUpInfo {
 pub struct RetryResponse {
     pub status: String,
     pub session_id: String,
+}
+
+// =============================================================================
+// SSE Analysis Events
+// =============================================================================
+
+/// Events streamed during analysis via SSE.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnalysisEvent {
+    /// Backfill of all previous events (sent first on connect)
+    Backfill { events: Vec<AnalysisEvent> },
+    /// Model is thinking
+    Thinking,
+    /// Streaming text from model
+    #[serde(rename_all = "camelCase")]
+    TextDelta { delta: String },
+    /// Tool invocation starting
+    #[serde(rename_all = "camelCase")]
+    ToolStart {
+        tool: String,
+        args: serde_json::Value,
+    },
+    /// Streaming tool output
+    #[serde(rename_all = "camelCase")]
+    ToolOutput { output: String },
+    /// Tool completed
+    #[serde(rename_all = "camelCase")]
+    ToolEnd {
+        tool: String,
+        #[serde(rename = "isError")]
+        is_error: bool,
+    },
+    /// Analysis complete with final proposal
+    #[serde(rename_all = "camelCase")]
+    Complete { proposal: String },
+    /// Error occurred
+    #[serde(rename_all = "camelCase")]
+    Error { message: String },
 }

@@ -1,7 +1,9 @@
 //! UI rendering with Ratatui.
 
-mod list;
+mod analysis;
 mod detail;
+mod list;
+mod proposal;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -12,6 +14,19 @@ use crate::app::{App, Screen};
 
 /// Main draw function - routes to appropriate screen.
 pub fn draw(f: &mut Frame, app: &App) {
+    // Fullscreen views (have their own footer)
+    match app.screen {
+        Screen::Analysis => {
+            analysis::draw_analysis(f, app, f.area());
+            return;
+        }
+        Screen::Proposal => {
+            proposal::draw_proposal(f, app, f.area());
+            return;
+        }
+        _ => {}
+    }
+
     // Create layout with main area and status bar
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -25,6 +40,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     match app.screen {
         Screen::List => list::draw_list(f, app, chunks[0]),
         Screen::Detail => detail::draw_detail(f, app, chunks[0]),
+        Screen::Analysis | Screen::Proposal => unreachable!(), // Handled above
     }
 
     // Draw action bar
@@ -41,27 +57,40 @@ fn draw_action_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let keybinds = match app.screen {
         Screen::List => vec![
-            ("↑↓/jk", "navigate"),
+            ("↑↓/jk/C-d/u", "navigate"),
             ("Enter", "open"),
+            ("a", "analyze"),
             ("r", "refresh"),
             ("q", "quit"),
         ],
         Screen::Detail => {
             let mut binds = vec![
-                ("↑↓/jk", "scroll"),
+                ("↑↓/jk/C-d/u", "scroll"),
                 ("r", "refresh"),
                 ("q/Esc", "back"),
             ];
 
-            // Add state-specific keybinds based on current issue
+            // Add state-specific keybinds based on current issue (only if loaded and not refreshing)
+            let details_ready = app.current_issue.is_some() && !app.is_refreshing_detail;
             if let Some(issue) = &app.current_issue {
                 match &issue.state {
                     crate::api::IssueState::Pending => {
-                        binds.push(("a", "analyze"));
+                        if details_ready {
+                            binds.push(("a", "analyze"));
+                        }
+                    }
+                    crate::api::IssueState::Analyzing { .. } => {
+                        if details_ready {
+                            binds.push(("a", "re-analyze"));
+                        }
+                        binds.push(("Enter", "view analysis"));
+                        binds.push(("i", "interactive"));
                     }
                     crate::api::IssueState::PendingApproval { .. } => {
-                        binds.push(("A", "approve"));
-                        binds.push(("x", "reject"));
+                        if details_ready {
+                            binds.push(("a", "re-analyze"));
+                        }
+                        binds.push(("Enter", "view proposal"));
                         binds.push(("i", "interactive"));
                     }
                     crate::api::IssueState::InProgress { .. } => {
@@ -72,13 +101,19 @@ fn draw_action_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         binds.push(("i", "interactive"));
                     }
                     crate::api::IssueState::Error { .. } => {
+                        if details_ready {
+                            binds.push(("a", "re-analyze"));
+                        }
                         binds.push(("R", "retry"));
                     }
-                    _ => {}
                 }
             }
 
             binds
+        }
+        Screen::Analysis | Screen::Proposal => {
+            // These screens have their own footer, this shouldn't be called
+            vec![]
         }
     };
 

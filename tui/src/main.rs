@@ -6,19 +6,21 @@
 mod api;
 mod app;
 mod escape;
+mod logging;
 mod server;
 mod ui;
 
 use anyhow::Result;
 use clap::Parser;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
+use tracing::{debug, error, info};
 
 use app::{App, Screen};
 use server::ServerProcess;
@@ -43,7 +45,11 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize logging first (keep guard alive for entire program)
+    let _log_guard = logging::init()?;
+
     let args = Args::parse();
+    info!(?args, "Starting Glass TUI");
 
     // Resolve project path to absolute
     let project_path = Path::new(&args.project)
@@ -106,6 +112,10 @@ async fn run_app(
         // Poll for background task completions
         app.poll_background();
 
+        // Update terminal size for text wrapping
+        let size = terminal.size()?;
+        app.set_terminal_size(size.width, size.height);
+
         // Draw UI
         terminal.draw(|f| ui::draw(f, app))?;
 
@@ -117,6 +127,45 @@ async fn run_app(
                     continue;
                 }
 
+                // Handle Ctrl+D/U for half-page scrolling on all screens
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    match (app.screen.clone(), key.code) {
+                        (Screen::List, KeyCode::Char('d')) => {
+                            app.move_selection(app.half_page());
+                            continue;
+                        }
+                        (Screen::List, KeyCode::Char('u')) => {
+                            app.move_selection(-app.half_page());
+                            continue;
+                        }
+                        (Screen::Detail, KeyCode::Char('d')) => {
+                            app.scroll_detail(app.half_page());
+                            continue;
+                        }
+                        (Screen::Detail, KeyCode::Char('u')) => {
+                            app.scroll_detail(-app.half_page());
+                            continue;
+                        }
+                        (Screen::Analysis, KeyCode::Char('d')) => {
+                            app.scroll_analysis(app.half_page());
+                            continue;
+                        }
+                        (Screen::Analysis, KeyCode::Char('u')) => {
+                            app.scroll_analysis(-app.half_page());
+                            continue;
+                        }
+                        (Screen::Proposal, KeyCode::Char('d')) => {
+                            app.scroll_proposal(app.half_page());
+                            continue;
+                        }
+                        (Screen::Proposal, KeyCode::Char('u')) => {
+                            app.scroll_proposal(-app.half_page());
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+
                 match app.screen {
                     Screen::List => match key.code {
                         KeyCode::Char('q') => return Ok(()),
@@ -125,6 +174,7 @@ async fn run_app(
                         KeyCode::Char('g') => app.jump_to_top(),
                         KeyCode::Char('G') => app.jump_to_bottom(),
                         KeyCode::Char('r') => app.start_refresh(),
+                        KeyCode::Char('a') => app.analyze_issue_from_list().await,
                         KeyCode::Enter => {
                             app.open_selected();
                             app.load_cached_detail().await;
@@ -164,11 +214,47 @@ async fn run_app(
                                 app.refresh_current_issue().await;
                             }
                         }
+                        KeyCode::Enter => {
+                            // View proposal or analysis based on state
+                            if let Some(issue) = &app.current_issue {
+                                match &issue.state {
+                                    crate::api::IssueState::PendingApproval { .. } => {
+                                        app.open_proposal();
+                                    }
+                                    crate::api::IssueState::Analyzing { .. } => {
+                                        // Go to analysis screen to see streaming
+                                        app.screen = Screen::Analysis;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
                         KeyCode::Char('a') => app.analyze_issue().await,
-                        KeyCode::Char('A') => app.approve_proposal().await,
-                        KeyCode::Char('x') => app.reject_proposal().await,
                         KeyCode::Char('d') => app.complete_review().await,
                         KeyCode::Char('R') => app.retry_error().await,
+                        _ => {}
+                    },
+                    Screen::Analysis => match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => {
+                            app.back_to_detail();
+                            app.refresh_current_issue().await;
+                        }
+                        KeyCode::Char('j') | KeyCode::Down => app.scroll_analysis(1),
+                        KeyCode::Char('k') | KeyCode::Up => app.scroll_analysis(-1),
+                        _ => {}
+                    },
+                    Screen::Proposal => match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => app.back_from_proposal(),
+                        KeyCode::Char('j') | KeyCode::Down => app.scroll_proposal(1),
+                        KeyCode::Char('k') | KeyCode::Up => app.scroll_proposal(-1),
+                        KeyCode::Char('A') => {
+                            app.approve_proposal().await;
+                            app.back_from_proposal();
+                        }
+                        KeyCode::Char('x') => {
+                            app.reject_proposal().await;
+                            app.back_from_proposal();
+                        }
                         _ => {}
                     },
                 }

@@ -36,6 +36,13 @@
 
 export { AgentService, AgentServiceLive, type AgentServiceInterface } from "./service.js";
 export { AgentError, SessionNotFoundError, InvalidModelError } from "./errors.js";
+export {
+	EventBufferService,
+	EventBufferServiceLive,
+	type EventBufferServiceInterface,
+	type AnalysisEvent,
+	type SSEMessage,
+} from "./event-buffer.js";
 export type {
 	AgentSessionHandle,
 	AgentEventListener,

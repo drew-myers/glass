@@ -69,39 +69,34 @@ export const databaseDirectory: Effect.Effect<string, never, ProjectPath> = Effe
 );
 
 /**
- * Computes the logs directory path for a given project.
- * Format: ~/.local/share/glass/<project-hash>/logs/
+ * Computes the logs directory path (shared across all projects).
+ * Format: ~/.local/state/glass/
  *
- * @param projectPath - Absolute path to the project
+ * Uses XDG_STATE_HOME if set, otherwise falls back to ~/.local/state
+ *
  * @returns Absolute path to the logs directory
  */
-export const getLogsDirectory = (projectPath: string): string => {
-	return Path.join(getDatabaseDirectory(projectPath), "logs");
+export const getLogsDirectory = (): string => {
+	const stateHome = process.env.XDG_STATE_HOME || Path.join(Os.homedir(), ".local", "state");
+	return Path.join(stateHome, "glass");
 };
 
 /**
- * Computes the log file path for a given project.
- * Format: ~/.local/share/glass/<project-hash>/logs/glass.log
+ * Computes the server log file path.
+ * Format: ~/.local/state/glass/server.log
  *
- * @param projectPath - Absolute path to the project
  * @returns Absolute path to the log file
  */
-export const getLogFilePath = (projectPath: string): string => {
-	return Path.join(getLogsDirectory(projectPath), "glass.log");
+export const getLogFilePath = (): string => {
+	return Path.join(getLogsDirectory(), "server.log");
 };
 
 /**
- * Effect that retrieves the logs directory from the ProjectPath service.
+ * Effect that retrieves the logs directory.
  */
-export const logsDirectory: Effect.Effect<string, never, ProjectPath> = Effect.map(
-	ProjectPath,
-	getLogsDirectory,
-);
+export const logsDirectory: Effect.Effect<string, never, never> = Effect.sync(getLogsDirectory);
 
 /**
- * Effect that retrieves the log file path from the ProjectPath service.
+ * Effect that retrieves the log file path.
  */
-export const logFilePath: Effect.Effect<string, never, ProjectPath> = Effect.map(
-	ProjectPath,
-	getLogFilePath,
-);
+export const logFilePath: Effect.Effect<string, never, never> = Effect.sync(getLogFilePath);

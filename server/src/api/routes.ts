@@ -12,7 +12,7 @@ import {
 } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { healthHandler } from "./handlers/health.js";
-import { listIssuesHandler, getIssueHandler, refreshIssuesHandler, refreshIssueHandler, analyzeIssueHandler } from "./handlers/issues.js";
+import { listIssuesHandler, getIssueHandler, refreshIssuesHandler, refreshIssueHandler, analyzeIssueHandler, eventsHandler } from "./handlers/issues.js";
 
 // =============================================================================
 // Router
@@ -22,12 +22,13 @@ const router = HttpRouter.empty.pipe(
 	// Health check
 	HttpRouter.get("/health", healthHandler),
 
-	// Issues
+	// Issues - more specific routes first
 	HttpRouter.get("/api/v1/issues", listIssuesHandler),
-	HttpRouter.get("/api/v1/issues/:id", getIssueHandler),
 	HttpRouter.post("/api/v1/issues/refresh", refreshIssuesHandler),
+	HttpRouter.get("/api/v1/issues/:id/events", eventsHandler),
 	HttpRouter.post("/api/v1/issues/:id/refresh", refreshIssueHandler),
 	HttpRouter.post("/api/v1/issues/:id/analyze", analyzeIssueHandler),
+	HttpRouter.get("/api/v1/issues/:id", getIssueHandler),
 
 	// TODO: Add more routes as we implement them
 	// HttpRouter.post("/api/v1/issues/:id/approve", approveHandler),
