@@ -295,5 +295,8 @@ export const formatTags = (tags: Readonly<Record<string, string>>): string => {
 	const entries = Object.entries(tags);
 	if (entries.length === 0) return "";
 
+	// Sort by key for consistent ordering
+	entries.sort(([a], [b]) => a.localeCompare(b));
+
 	return entries.map(([key, value]) => `${key}: ${value}`).join("\n");
 };

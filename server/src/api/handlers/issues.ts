@@ -26,7 +26,7 @@ const mapIssueToListItem = (issue: Issue) => {
 		sourceType: issue.source._tag.toLowerCase(),
 		title: common?.title ?? "Unknown",
 		shortId: common?.shortId ?? issue.id,
-		status: issue.state._tag.toLowerCase().replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, ""),
+		status: issue.state._tag.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, ""),
 		eventCount: common?.count ?? 0,
 		userCount: common?.userCount ?? 0,
 		firstSeen: common?.firstSeen?.toISOString() ?? issue.createdAt.toISOString(),
@@ -87,6 +87,12 @@ const mapIssueToDetail = (issue: Issue) => {
 	
 	if (issue.source._tag === "Sentry") {
 		const data = issue.source.data;
+		
+		// Sort tags by key for consistent ordering
+		const sortedTags = data.tags
+			? Object.fromEntries(Object.entries(data.tags).sort(([a], [b]) => a.localeCompare(b)))
+			: undefined;
+		
 		source = {
 			title: data.title,
 			shortId: data.shortId,
@@ -100,7 +106,7 @@ const mapIssueToDetail = (issue: Issue) => {
 			breadcrumbs: data.breadcrumbs,
 			environment: data.environment,
 			release: data.release,
-			tags: data.tags,
+			tags: sortedTags,
 			request: data.request,
 			user: data.user,
 			contexts: data.contexts,

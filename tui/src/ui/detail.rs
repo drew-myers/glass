@@ -364,8 +364,12 @@ fn draw_content(f: &mut Frame, issue: &IssueDetail, scroll: usize, area: Rect) {
             )));
             lines.push(Line::default());
 
+            // Sort tags by key for consistent display
+            let mut sorted_tags: Vec<_> = tags.iter().collect();
+            sorted_tags.sort_by(|(a, _), (b, _)| a.cmp(b));
+
             let mut tag_spans: Vec<Span> = Vec::new();
-            for (key, value) in tags {
+            for (key, value) in sorted_tags {
                 if !tag_spans.is_empty() {
                     tag_spans.push(Span::raw("  "));
                 }

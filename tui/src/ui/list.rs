@@ -22,13 +22,13 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         .issues
         .iter()
         .map(|issue| {
-            let (icon, color) = status_icon_and_color(&issue.status);
+            let (icon, color, label) = status_icon_and_color(&issue.status);
             let title = pad_or_truncate(&issue.title, title_width);
 
             let spans = vec![
                 Span::styled(format!("{} ", icon), Style::default().fg(color)),
                 Span::styled(
-                    format!("{:9}", issue.status.to_uppercase()),
+                    format!("{:9}", label),
                     Style::default().fg(color),
                 ),
                 Span::raw(title),
@@ -80,16 +80,16 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-/// Get status icon and color.
-fn status_icon_and_color(status: &str) -> (&'static str, Color) {
+/// Get status icon, color, and abbreviated label.
+fn status_icon_and_color(status: &str) -> (&'static str, Color, &'static str) {
     match status {
-        "pending" => ("○", Color::DarkGray),
-        "analyzing" => ("◐", Color::Yellow),
-        "pending_approval" => ("◉", Color::Cyan),
-        "in_progress" => ("◐", Color::Blue),
-        "pending_review" => ("●", Color::Green),
-        "error" => ("✗", Color::Red),
-        _ => ("?", Color::White),
+        "pending" => ("○", Color::DarkGray, "PENDING"),
+        "analyzing" => ("◐", Color::Yellow, "ANALYZE"),
+        "pending_approval" => ("◉", Color::Cyan, "APPROVAL"),
+        "in_progress" => ("◐", Color::Blue, "WORKING"),
+        "pending_review" => ("●", Color::Green, "REVIEW"),
+        "error" => ("✗", Color::Red, "ERROR"),
+        _ => ("?", Color::White, "UNKNOWN"),
     }
 }
 
