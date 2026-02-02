@@ -19,6 +19,7 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
     let title_width = (area.width as usize).saturating_sub(fixed_width).max(20);
 
     let items: Vec<ListItem> = app
+        .state
         .issues
         .iter()
         .map(|issue| {
@@ -46,7 +47,7 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = if app.is_loading || app.is_refreshing {
+    let title = if app.state.is_loading || app.state.is_refreshing {
         " Glass ◐ "
     } else {
         " Glass "
@@ -61,13 +62,13 @@ pub fn draw_list(f: &mut Frame, app: &App, area: Rect) {
         )
         .highlight_symbol("▶ ");
 
-    let mut state = ListState::default();
-    state.select(Some(app.selected_index));
+    let mut list_state = ListState::default();
+    list_state.select(Some(app.state.selected_index));
 
-    f.render_stateful_widget(list, area, &mut state);
+    f.render_stateful_widget(list, area, &mut list_state);
 
     // Show error if any
-    if let Some(error) = &app.error {
+    if let Some(error) = &app.state.error {
         let error_area = Rect {
             x: area.x + 2,
             y: area.y + area.height.saturating_sub(2),

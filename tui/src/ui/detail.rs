@@ -28,9 +28,9 @@ pub fn draw_detail(f: &mut Frame, app: &App, area: Rect) {
 
 /// Draw the main content area (issue detail or loading state).
 fn draw_content_area(f: &mut Frame, app: &App, area: Rect) {
-    if let Some(issue) = &app.current_issue {
-        draw_content(f, issue, app.detail_scroll, area);
-    } else if app.is_loading {
+    if let Some(issue) = &app.state.current_issue {
+        draw_content(f, issue, app.state.detail_scroll, area);
+    } else if app.state.is_loading {
         let loading = Paragraph::new("Loading...")
             .style(Style::default().fg(Color::DarkGray))
             .block(Block::default().borders(Borders::ALL));
@@ -44,7 +44,7 @@ fn draw_content_area(f: &mut Frame, app: &App, area: Rect) {
 }
 /// Draw the header with issue title and status.
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
-    let (title, status) = if let Some(issue) = &app.current_issue {
+    let (title, status) = if let Some(issue) = &app.state.current_issue {
         let title = issue
             .source
             .title
@@ -52,7 +52,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             .unwrap_or_else(|| "Unknown".to_string());
         let status = format_status(&issue.state);
         (title, status)
-    } else if let Some(issue) = app.issues.get(app.selected_index) {
+    } else if let Some(issue) = app.state.issues.get(app.state.selected_index) {
         (issue.title.clone(), issue.status.clone())
     } else {
         ("No issue".to_string(), "".to_string())
@@ -61,7 +61,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let (icon, color) = status_icon_and_color(&status);
 
     // Show spinner if refreshing
-    let refresh_indicator = if app.is_refreshing_detail || app.is_loading {
+    let refresh_indicator = if app.state.is_refreshing_detail || app.state.is_loading {
         " ◐"
     } else {
         ""

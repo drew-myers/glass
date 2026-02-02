@@ -30,6 +30,7 @@ pub fn draw_proposal(f: &mut Frame, app: &App, area: Rect) {
 /// Draw the header with issue title.
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let title = app
+        .state
         .current_issue
         .as_ref()
         .and_then(|i| i.source.title.clone())
@@ -50,7 +51,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
 
     // Get proposal text from issue state
-    let proposal_text = app.current_issue.as_ref().and_then(|issue| {
+    let proposal_text = app.state.current_issue.as_ref().and_then(|issue| {
         if let IssueState::PendingApproval { proposal, .. } = &issue.state {
             Some(proposal.as_str())
         } else {
@@ -113,7 +114,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     let paragraph = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL))
         .wrap(Wrap { trim: false })
-        .scroll((app.proposal_scroll as u16, 0));
+        .scroll((app.state.proposal_scroll as u16, 0));
 
     f.render_widget(paragraph, area);
 }

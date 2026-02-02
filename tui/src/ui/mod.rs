@@ -15,7 +15,7 @@ use crate::app::{App, Screen};
 /// Main draw function - routes to appropriate screen.
 pub fn draw(f: &mut Frame, app: &App) {
     // Fullscreen views (have their own footer)
-    match app.screen {
+    match app.state.screen {
         Screen::Analysis => {
             analysis::draw_analysis(f, app, f.area());
             return;
@@ -37,7 +37,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         .split(f.area());
 
     // Draw main content based on current screen
-    match app.screen {
+    match app.state.screen {
         Screen::List => list::draw_list(f, app, chunks[0]),
         Screen::Detail => detail::draw_detail(f, app, chunks[0]),
         Screen::Analysis | Screen::Proposal => unreachable!(), // Handled above
@@ -55,7 +55,7 @@ fn draw_action_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         widgets::Paragraph,
     };
 
-    let keybinds = match app.screen {
+    let keybinds = match app.state.screen {
         Screen::List => vec![
             ("↑↓/jk/C-d/u", "navigate"),
             ("Enter", "open"),
@@ -71,8 +71,8 @@ fn draw_action_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             ];
 
             // Add state-specific keybinds based on current issue (only if loaded and not refreshing)
-            let details_ready = app.current_issue.is_some() && !app.is_refreshing_detail;
-            if let Some(issue) = &app.current_issue {
+            let details_ready = app.state.current_issue.is_some() && !app.state.is_refreshing_detail;
+            if let Some(issue) = &app.state.current_issue {
                 match &issue.state {
                     crate::api::IssueState::Pending => {
                         if details_ready {

@@ -29,12 +29,13 @@ pub fn draw_analysis(f: &mut Frame, app: &App, area: Rect) {
 /// Draw the header with issue title.
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let title = app
+        .state
         .current_issue
         .as_ref()
         .and_then(|i| i.source.title.clone())
         .unwrap_or_else(|| "Analysis".to_string());
 
-    let status_indicator = if app.is_streaming_analysis {
+    let status_indicator = if app.state.is_streaming_analysis {
         Span::styled(" ◐ analyzing", Style::default().fg(Color::Yellow))
     } else {
         Span::styled(" ✓ complete", Style::default().fg(Color::Green))
@@ -58,10 +59,10 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     let visible_height = area.height.saturating_sub(2) as usize;
 
     // Auto-scroll: if we have more lines than visible, show the last N lines
-    let total_lines = app.analysis_lines.len();
-    let skip = if app.analysis_scroll > 0 {
+    let total_lines = app.state.analysis_lines.len();
+    let skip = if app.state.analysis_scroll > 0 {
         // Manual scroll position
-        app.analysis_scroll
+        app.state.analysis_scroll
     } else if total_lines > visible_height {
         // Auto-scroll to bottom
         total_lines - visible_height
@@ -69,7 +70,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         0
     };
 
-    for activity in app.analysis_lines.iter().skip(skip) {
+    for activity in app.state.analysis_lines.iter().skip(skip) {
         let (icon_color, text_color) = match activity.style {
             ActivityStyle::Normal => (Color::White, Color::White),
             ActivityStyle::Dimmed => (Color::DarkGray, Color::DarkGray),
@@ -86,7 +87,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     }
 
     // Add cursor if streaming
-    if app.is_streaming_analysis {
+    if app.state.is_streaming_analysis {
         lines.push(Line::from(Span::styled(
             "  ▊",
             Style::default().fg(Color::Yellow),
@@ -102,7 +103,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
 
 /// Draw the footer with keybindings.
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
-    let keys = if app.is_streaming_analysis {
+    let keys = if app.state.is_streaming_analysis {
         vec![
             ("q/Esc", "back"),
             ("↑↓/C-d/u", "scroll"),
