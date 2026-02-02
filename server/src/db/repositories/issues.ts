@@ -9,11 +9,14 @@ import { SqlClient } from "@effect/sql";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import type {
 	Breadcrumb,
+	ContextInfo,
 	ExceptionValue,
 	Issue,
 	IssueSource,
 	IssueState,
+	RequestInfo,
 	SentrySourceData,
+	UserInfo,
 } from "../../domain/issue.js";
 import {
 	IssueSource as IssueSourceEnum,
@@ -76,6 +79,10 @@ const SentryIssueRowSchema = Schema.Struct({
 	tags: Schema.NullOr(Schema.parseJson(TagsSchema)),
 	exceptions: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
 	breadcrumbs: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
+	// Context fields (from event)
+	request: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
+	user_info: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
+	contexts: Schema.NullOr(Schema.parseJson(Schema.Unknown)),
 	// Workflow state fields
 	status: Schema.String,
 	analysis_session_id: Schema.NullOr(Schema.String),
@@ -191,6 +198,10 @@ const rowToIssue = (row: SentryIssueRow): Issue => {
 		...(row.tags !== null ? { tags: row.tags } : {}),
 		...(row.exceptions !== null ? { exceptions: row.exceptions as readonly ExceptionValue[] } : {}),
 		...(row.breadcrumbs !== null ? { breadcrumbs: row.breadcrumbs as readonly Breadcrumb[] } : {}),
+		// Context fields
+		...(row.request !== null ? { request: row.request as RequestInfo } : {}),
+		...(row.user_info !== null ? { user: row.user_info as UserInfo } : {}),
+		...(row.contexts !== null ? { contexts: row.contexts as ContextInfo } : {}),
 	};
 
 	const source: IssueSource = IssueSourceEnum.Sentry({
@@ -373,17 +384,22 @@ const make = Effect.gen(function* () {
 			const breadcrumbsJson = issue.data.breadcrumbs
 				? JSON.stringify(issue.data.breadcrumbs)
 				: null;
+			const requestJson = issue.data.request ? JSON.stringify(issue.data.request) : null;
+			const userJson = issue.data.user ? JSON.stringify(issue.data.user) : null;
+			const contextsJson = issue.data.contexts ? JSON.stringify(issue.data.contexts) : null;
 
 			yield* sql`
         INSERT INTO sentry_issues (
           id, project, title, short_id, culprit, 
           first_seen, last_seen, count, user_count, metadata,
           environment, release, tags, exceptions, breadcrumbs,
+          request, user_info, contexts,
           status
         ) VALUES (
           ${issue.id}, ${issue.project}, ${issue.data.title}, ${issue.data.shortId}, ${issue.data.culprit},
           ${firstSeen}, ${lastSeen}, ${issue.data.count ?? null}, ${issue.data.userCount ?? null}, ${metadataJson},
           ${issue.data.environment ?? null}, ${issue.data.release ?? null}, ${tagsJson}, ${exceptionsJson}, ${breadcrumbsJson},
+          ${requestJson}, ${userJson}, ${contextsJson},
           'pending'
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -400,7 +416,10 @@ const make = Effect.gen(function* () {
           release = COALESCE(${issue.data.release ?? null}, sentry_issues.release),
           tags = COALESCE(${tagsJson}, sentry_issues.tags),
           exceptions = COALESCE(${exceptionsJson}, sentry_issues.exceptions),
-          breadcrumbs = COALESCE(${breadcrumbsJson}, sentry_issues.breadcrumbs)
+          breadcrumbs = COALESCE(${breadcrumbsJson}, sentry_issues.breadcrumbs),
+          request = COALESCE(${requestJson}, sentry_issues.request),
+          user_info = COALESCE(${userJson}, sentry_issues.user_info),
+          contexts = COALESCE(${contextsJson}, sentry_issues.contexts)
       `;
 
 			// Return the upserted issue
