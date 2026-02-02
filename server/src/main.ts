@@ -11,6 +11,7 @@ import { ConfigLive } from "./config/index.js";
 import { DatabaseLive } from "./db/index.js";
 import { FileLoggerLive } from "./lib/logger.js";
 import { ProjectPath } from "./lib/project.js";
+import { AgentServiceLive } from "./services/agent/index.js";
 import { SentryServiceLive } from "./services/sentry/index.js";
 import { ApiLive } from "./api/routes.js";
 
@@ -60,6 +61,11 @@ const createAppLayer = () => {
 		Layer.provide(FetchHttpClient.layer),
 	);
 
+	// Agent service
+	const AgentLayer = AgentServiceLive(projectPath).pipe(
+		Layer.provide(ConfigLayer),
+	);
+
 	// HTTP Server
 	const ServerLayer = BunHttpServer.layer({ port: PORT });
 
@@ -69,6 +75,7 @@ const createAppLayer = () => {
 		ConfigLayer,
 		DbLayer,
 		SentryLayer,
+		AgentLayer,
 		ServerLayer,
 	);
 };

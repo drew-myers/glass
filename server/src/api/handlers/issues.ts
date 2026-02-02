@@ -6,6 +6,9 @@ import { HttpServerRequest, HttpServerResponse } from "@effect/platform";
 import { Effect, Option } from "effect";
 import { SentryIssueRepository } from "../../db/index.js";
 import type { Issue } from "../../domain/issue.js";
+import { IssueState } from "../../domain/issue.js";
+import { AgentService } from "../../services/agent/index.js";
+import { buildAnalysisPrompt } from "../../services/prompts/index.js";
 import { SentryService } from "../../services/sentry/index.js";
 
 // =============================================================================
@@ -383,6 +386,145 @@ export const refreshIssueHandler = Effect.gen(function* () {
 				error: {
 					code: "INTERNAL_ERROR",
 					message: "Failed to update issue in database",
+				},
+			},
+			{ status: 500 },
+		),
+	),
+);
+
+/**
+ * POST /api/v1/issues/:id/analyze
+ *
+ * Starts a headless Pi analysis session for the issue.
+ * The analysis runs in background; this returns immediately with session info.
+ *
+ * Valid only when issue is in `pending` or `error` state.
+ */
+export const analyzeIssueHandler = Effect.gen(function* () {
+	const agentService = yield* AgentService;
+	const issueRepo = yield* SentryIssueRepository;
+	const request = yield* HttpServerRequest.HttpServerRequest;
+
+	// Extract ID from path params (format: /api/v1/issues/:id/analyze)
+	const url = new URL(request.url, "http://localhost");
+	const pathParts = url.pathname.split("/");
+	const id = pathParts[pathParts.length - 2]; // Second to last segment
+
+	if (!id) {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "VALIDATION_ERROR",
+					message: "Issue ID is required",
+				},
+			},
+			{ status: 400 },
+		);
+	}
+
+	// Look up the issue
+	const maybeIssue = yield* issueRepo.getById(id).pipe(
+		Effect.catchAll(() => Effect.succeed(Option.none<Issue>())),
+	);
+
+	let issue: Issue | null = Option.isSome(maybeIssue) ? maybeIssue.value : null;
+
+	// Also try with sentry: prefix
+	if (!issue) {
+		const maybeIssue2 = yield* issueRepo.getById(`sentry:${id}`).pipe(
+			Effect.catchAll(() => Effect.succeed(Option.none<Issue>())),
+		);
+		issue = Option.isSome(maybeIssue2) ? maybeIssue2.value : null;
+	}
+
+	if (!issue) {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "NOT_FOUND",
+					message: `Issue not found: ${id}`,
+				},
+			},
+			{ status: 404 },
+		);
+	}
+
+	// Validate state - only allow analysis from Pending or Error states
+	if (issue.state._tag !== "Pending" && issue.state._tag !== "Error") {
+		return yield* HttpServerResponse.json(
+			{
+				error: {
+					code: "INVALID_STATE",
+					message: `Cannot analyze issue in '${issue.state._tag}' state. Must be 'Pending' or 'Error'.`,
+				},
+			},
+			{ status: 409 },
+		);
+	}
+
+	// Create analysis session
+	const sessionHandle = yield* agentService.createAnalysisSession().pipe(
+		Effect.mapError((error) => ({
+			_tag: "AgentError" as const,
+			error,
+		})),
+	);
+
+	// Update issue state to Analyzing
+	yield* issueRepo.updateState(issue.id, IssueState.Analyzing({ sessionId: sessionHandle.sessionId })).pipe(
+		Effect.mapError((error) => ({
+			_tag: "DbError" as const,
+			error,
+		})),
+	);
+
+	// Build the analysis prompt
+	const prompt = buildAnalysisPrompt(issue);
+
+	// Start analysis in background (fire and forget)
+	// The agent will run and we'll track completion via events
+	Effect.runFork(
+		sessionHandle.prompt(prompt).pipe(
+			Effect.tapError((error) =>
+				Effect.gen(function* () {
+					// On error, update issue state to Error
+					yield* issueRepo.updateState(
+						issue.id,
+						IssueState.Error({
+							previousState: "analyzing",
+							sessionId: sessionHandle.sessionId,
+							error: error.message,
+						}),
+					).pipe(Effect.catchAll(() => Effect.void));
+				}),
+			),
+			Effect.catchAll(() => Effect.void),
+		),
+	);
+
+	return yield* HttpServerResponse.json({
+		status: "analyzing",
+		sessionId: sessionHandle.sessionId,
+	});
+}).pipe(
+	Effect.catchTag("AgentError", (e) =>
+		HttpServerResponse.json(
+			{
+				error: {
+					code: "AGENT_ERROR",
+					message: `Failed to create analysis session: ${e.error.message}`,
+				},
+			},
+			{ status: 500 },
+		),
+	),
+	Effect.catchTag("DbError", () =>
+		HttpServerResponse.json(
+			{
+				error: {
+					code: "INTERNAL_ERROR",
+					message: "Failed to update issue state",
 				},
 			},
 			{ status: 500 },
